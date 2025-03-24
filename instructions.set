@@ -1,0 +1,181 @@
+; ============================================
+; 🦅 Falcon ASM - Definição de Estrutura e Instruções
+; ============================================
+
+; ============================
+; 🧠 Política de Crescimento da Memória
+; ============================
+
+; No Falcon ASM, a memória cresce sempre para cima:
+; → Endereços maiores representam regiões mais novas da memória
+
+; Isso vale tanto para acesso geral quanto para a pilha.
+
+; Exemplo de acesso com deslocamento:
+;   LW   R1, 4(R2)      ; R1 = mem[R2 + 4]
+
+; Comportamento da pilha (também crescente):
+;   PUSH: mem[SP] = valor; SP = SP + tamanho
+;   POP:  SP = SP - tamanho; valor = mem[SP]
+
+
+
+; ============================
+; 📏 Tamanho das Palavras
+; ============================
+#WORD = 32 BYTES
+
+; ============================
+; 📦 Tipos de Dados
+; ============================
+DATA_SET : 
+ - QWORD   ; 1 BYTE
+ - WORD    ; 4 BYTES
+ - DWORD   ; 8 BYTES
+
+; ============================
+; ➕ Instruções Aritméticas (Inteiros)
+; ============================
+ADD.Q  R1, R2, R3     ; R1 = R2 + R3 (QWORD)
+ADD.W  R1, R2, R3     ; R1 = R2 + R3 (WORD)
+ADD.D  R1, R2, R3     ; R1 = R2 + R3 (DWORD)
+
+SUB.Q  R1, R2, R3     ; Subtração
+SUB.W  R1, R2, R3
+SUB.D  R1, R2, R3
+
+MUL.Q  R1, R2, R3     ; Multiplicação
+MUL.W  R1, R2, R3
+MUL.D  R1, R2, R3
+
+DIV.Q  R1, R2, R3     ; Divisão
+DIV.W  R1, R2, R3
+DIV.D  R1, R2, R3
+
+MOV    R1, R2           ; R1 = R2
+
+; ============================
+; 🔁 Controle de Fluxo
+; ============================
+JMP    LABEL            ; Salto incondicional
+JNZ    R1, LABEL        ; Salta se R1 ≠ 0
+JZ     R1, LABEL        ; Salta se R1 == 0
+JGT    R1, R2, LABEL    ; Salta se R1 > R2
+JLT    R1, R2, LABEL    ; Salta se R1 < R2
+JGE    R1, R2, LABEL    ; Salta se R1 ≥ R2
+JLE    R1, R2, LABEL    ; Salta se R1 ≤ R2
+BEGIN  ; Início de bloco de repetição
+END    ; Fim de bloco de repetição
+
+; ============================
+; 💾 Acesso à Memória (Load/Store)
+; ============================
+
+; Load
+LQW    R1, offset(R2)   ; Load QWORD  (1 byte)  → R1
+LW     R1, offset(R2)   ; Load WORD   (4 bytes) → R1
+LDW    R1, offset(R2)   ; Load DWORD  (8 bytes) → R1
+LA     R1, LABEL        ; Load Address of LABEL → R1
+
+; Store
+SQW    R1, offset(R2)   ; Store QWORD  ← R1
+SW     R1, offset(R2)   ; Store WORD   ← R1
+SDW    R1, offset(R2)   ; Store DWORD  ← R1
+
+; ============================
+; 🧮 Aritmética com Ponteiros
+; ============================
+
+; ---------- Store via Ponteiro ----------
+; SPT.T Raddr, Rsrc  → mem[Raddr] = Rsrc
+
+SPT.Q  R1, R2        ; mem[R1] = R2 (QWORD + 1 byte)
+SPT.W  R1, R2        ; mem[R1] = R2 (WORD  + 4 bytes)
+SPT.D  R1, R2        ; mem[R1] = R2 (DWORD + 8 bytes)
+
+; ---------- Load via Ponteiro ----------
+; LPT.T Rdest, Raddr → Rdest = mem[Raddr]
+
+LPT.Q  R1, R2        ; R1 = mem[R2] (QWORD + 1 byte)
+LPT.W  R1, R2        ; R1 = mem[R2] (WORD  + 4 bytes)
+LPT.D  R1, R2        ; R1 = mem[R2] (DWORD + 8 bytes)
+
+
+; ============================
+; 🔢 Instruções Aritméticas - Float
+; ============================
+FADD   F1, F2, F3       ; F1 = F2 + F3
+FSUB   F1, F2, F3
+FMUL   F1, F2, F3
+FDIV   F1, F2, F3
+
+; ============================
+; 💾 Load/Store para Float
+; ============================
+FLW    F1, offset(R2)   ; Load float  (4 bytes) → F1
+FSD    F1, offset(R2)   ; Store float (4 bytes) ← F1
+
+; ============================
+; 🔁 Conversões entre Inteiro e Float
+; ============================
+ITOF   F1, R1           ; F1 = (float) R1
+FTOI   R1, F1           ; R1 = (int) F1
+
+; ============================
+; 📥 Pilha (Stack)
+; ============================
+
+; PUSH
+PUSH.Q R1              ; Empilha 1 byte
+PUSH.W R1              ; Empilha 4 bytes
+PUSH.D R1              ; Empilha 8 bytes
+
+; POP
+POP.Q  R1              ; Desempilha 1 byte
+POP.W  R1              ; Desempilha 4 bytes
+POP.D  R1              ; Desempilha 8 bytes
+
+; PEEK
+PEEK.Q R1              ; Lê 1 byte do topo da pilha
+PEEK.W R1              ; Lê 4 bytes do topo da pilha
+PEEK.D R1              ; Lê 8 bytes do topo da pilha
+
+; ============================
+; 🧠 Registradores - Falcon ASM
+; ============================
+
+; Temporários
+T0, T1, T2
+
+; Salvos
+S0, S1, S2, S3, S4
+
+; Argumentos
+A0, A1, A2, A3, A4,
+
+; Float
+F0 – F7                ; Registradores de ponto flutuante
+
+; Controle
+SP     ; Stack Pointer
+PC     ; Program Counter
+RA     ; Return Address
+R0     ; Constante 0
+
+; ============================
+; 🗂️ Diretivas de Seção
+; ============================
+
+.data
+; Dados estáticos
+value:  .word 10
+array:  .word 1, 2, 3, 4
+texto:  .ascii "Olá, Falcon"
+
+.text
+; Código executável
+    LA     T0, value
+    LPT.W  T1, T0
+    ADD.W  T1, T1, T1
+    SPT.W  T0, T1
+    HALT
