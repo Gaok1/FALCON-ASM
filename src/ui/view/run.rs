@@ -1,240 +1,22 @@
-use super::{
-    app::{App, EditorMode, MemRegion, Tab},
-    editor::Editor,
-};
 use crate::falcon::{self, memory::Bus};
 use ratatui::Frame;
 use ratatui::prelude::*;
-use ratatui::widgets::{
-    Block, BorderType, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Tabs, Wrap,
-};
-use std::cmp::min;
+use ratatui::widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap};
 
-pub fn ui(f: &mut Frame, app: &App) {
-    let size = f.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // tabs
-            Constraint::Min(5),    // content
-            Constraint::Length(1), // status
-        ])
-        .split(size);
-
-    // Tabs with strong highlight and divider
-    let titles = ["Editor", "Run", "Docs"]
-        .into_iter()
-        .enumerate()
-        .map(|(i, t)| {
-            let mut line = Line::from(t);
-            let tab = match i {
-                0 => Tab::Editor,
-                1 => Tab::Run,
-                _ => Tab::Docs,
-            };
-            if Some(tab) == app.hover_tab && tab != app.tab {
-                line = line.style(Style::default().bg(Color::DarkGray));
-            }
-            line
-        })
-        .collect::<Vec<_>>();
-    let tabs = Tabs::new(titles)
-        .block(Block::default().borders(Borders::ALL).title("Falcon ASM"))
-        .style(Style::default())
-        .highlight_style(
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .divider(Span::styled(" │ ", Style::default().fg(Color::DarkGray)))
-        .select(match app.tab {
-            Tab::Editor => 0,
-            Tab::Run => 1,
-            Tab::Docs => 2,
-        });
-    f.render_widget(tabs, chunks[0]);
-
-    match app.tab {
-        Tab::Editor => {
-            let editor_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(5), Constraint::Min(3)])
-                .split(chunks[1]);
-            render_editor_status(f, editor_chunks[0], app);
-            render_editor(f, editor_chunks[1], app);
-        }
-        Tab::Run => render_run(f, chunks[1], app),
-        Tab::Docs => render_docs(f, chunks[1], app),
-    }
-
-    // Bottom status line with mode and tab hints
-    let mode = match app.mode {
-        EditorMode::Insert => "INSERT",
-        EditorMode::Command => "COMMAND",
-    };
-    let status = format!(
-        "Mode: {}  |  Ctrl+R=Assemble  |  Ctrl+O=Import  |  Ctrl+S=Export  |  1/2/3 switch tabs (Command mode)",
-        mode
-    );
-
-    let status = Paragraph::new(status).block(Block::default().borders(Borders::ALL));
-    f.render_widget(status, chunks[2]);
-}
-
-fn render_editor_status(f: &mut Frame, area: Rect, app: &App) {
-    let (mode_text, mode_color) = match app.mode {
-        EditorMode::Insert => ("INSERT", Color::Green),
-        EditorMode::Command => ("COMMAND", Color::Blue),
-    };
-    let mode = Line::from(vec![
-        Span::raw("Mode: "),
-        Span::styled(mode_text, Style::default().fg(mode_color)),
-    ]);
-
-    let compile_span = if let Some(msg) = &app.last_assemble_msg {
-        let color = if app.last_compile_ok == Some(true) {
-            Color::Green
-        } else {
-            Color::Red
-        };
-        Span::styled(msg.clone(), Style::default().fg(color))
-    } else {
-        Span::raw("Not compiled")
-    };
-    let build = Line::from(vec![Span::raw("Build: "), compile_span]);
-
-    let commands = Line::from(
-        "Commands: Esc=Command  |  i=Insert  |  Ctrl+R=Assemble  |  Ctrl+O=Import  |  Ctrl+S=Export",
-    );
-
-    let para = Paragraph::new(vec![mode, build, commands]).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Editor Status"),
-    );
-    f.render_widget(para, area);
-}
-
-fn render_editor(f: &mut Frame, area: Rect, app: &App) {
-    fn apply_selection(line: &mut Line, start: usize, end: usize) {
-        if start >= end {
-            return;
-        }
-        let mut char_pos = 0;
-        let mut new_spans = Vec::new();
-        for span in line.spans.drain(..) {
-            let content = span.content.to_string();
-            let len = Editor::char_count(&content);
-            let span_start = char_pos;
-            let span_end = char_pos + len;
-            if span_end <= start || span_start >= end {
-                new_spans.push(Span::styled(content, span.style));
-            } else {
-                if span_start < start {
-                    let byte = Editor::byte_at(&content, start - span_start);
-                    new_spans.push(Span::styled(content[..byte].to_string(), span.style));
-                }
-                let sel_from = start.max(span_start);
-                let sel_to = end.min(span_end);
-                let byte_start = Editor::byte_at(&content, sel_from - span_start);
-                let byte_end = Editor::byte_at(&content, sel_to - span_start);
-                let mut sel_style = span.style;
-                sel_style = sel_style.bg(Color::Blue);
-                new_spans.push(Span::styled(
-                    content[byte_start..byte_end].to_string(),
-                    sel_style,
-                ));
-                if span_end > end {
-                    let byte = Editor::byte_at(&content, end - span_start);
-                    new_spans.push(Span::styled(content[byte..].to_string(), span.style));
-                }
-            }
-            char_pos += len;
-        }
-        line.spans = new_spans;
-    }
-    // Compute visible window and center cursor when possible
-    let visible_h = area.height.saturating_sub(2) as usize; // minus borders
-    let len = app.editor.lines.len();
-    let mut start = 0usize;
-    if len > visible_h {
-        if app.editor.cursor_row <= visible_h / 2 {
-            start = 0;
-        } else if app.editor.cursor_row >= len.saturating_sub(visible_h / 2) {
-            start = len.saturating_sub(visible_h);
-        } else {
-            start = app.editor.cursor_row - visible_h / 2;
-        }
-    }
-    let end = min(len, start + visible_h);
-
-    // Note: long lines are clipped instead of wrapped to keep cursor math correct.
-    // Tabs insert 4 spaces to avoid width mismatch.
-    let mut rows: Vec<Line> = Vec::with_capacity(end - start);
-    for i in start..end {
-        let line_str = &app.editor.lines[i];
-        let mut line = Line::from(highlight_line(line_str));
-        if let Some(((sr, sc), (er, ec))) = app.editor.selection_range() {
-            if i >= sr && i <= er {
-                let (sel_start, sel_end) = if sr == er {
-                    (sc, ec)
-                } else if i == sr {
-                    (sc, Editor::char_count(line_str))
-                } else if i == er {
-                    (0, ec)
-                } else {
-                    (0, Editor::char_count(line_str))
-                };
-                apply_selection(&mut line, sel_start, sel_end);
-            }
-        }
-        if Some(i) == app.diag_line {
-            line = line.style(
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::UNDERLINED),
-            );
-        }
-        rows.push(line);
-    }
-    let mut block = Block::default()
-        .borders(Borders::ALL)
-        .title("Editor (RISC-V ASM) — Esc: Command, i: Insert, Ctrl+R: Assemble");
-    if let Some(ok) = app.last_compile_ok {
-        let (txt, color) = if ok {
-            ("[OK]", Color::Green)
-        } else {
-            ("[ERROR]", Color::Red)
-        };
-        let flag = Line::styled(txt, Style::default().fg(color)).right_aligned();
-        block = block.title(flag);
-    }
-    let para = Paragraph::new(rows).block(block);
-
-    f.render_widget(para, area);
-
-    // Draw cursor (single cell, no wrapping)
-    let cur_row = app.editor.cursor_row as u16;
-    let cur_col = app.editor.cursor_col as u16;
-    let cursor_x = area.x + 1 + cur_col; // inside left border
-    let cursor_y = area.y + 1 + (cur_row - start as u16);
-    if cursor_y < area.y + area.height && cursor_x < area.x + area.width {
-        f.set_cursor_position((cursor_x, cursor_y));
-    }
-}
+use super::{App, MemRegion};
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     let cw = r.width.saturating_sub(width) / 2;
     let ch = r.height.saturating_sub(height) / 2;
     Rect::new(r.x + cw, r.y + ch, width.min(r.width), height.min(r.height))
 }
-fn render_run(f: &mut Frame, area: Rect, app: &App) {
+
+pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // build status
-            Constraint::Length(4), // toggle status
+            Constraint::Length(3),
+            Constraint::Length(4),
             Constraint::Min(0),
         ])
         .split(area);
@@ -266,13 +48,12 @@ fn render_run(f: &mut Frame, area: Rect, app: &App) {
 
     // Main area
     let main = chunks[2];
-    // layout: left=regs/RAM, middle=instruction memory, right=details
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(38), // regs or RAM
-            Constraint::Length(38), // instruction memory
-            Constraint::Min(46),    // current instruction info
+            Constraint::Length(38),
+            Constraint::Length(38),
+            Constraint::Min(46),
         ])
         .split(main);
 
@@ -524,10 +305,9 @@ fn render_run_menu(f: &mut Frame, area: Rect, app: &App) {
             Span::raw(" View stack"),
         ]),
         Line::from(vec![
-            Span::styled("[t]", key_style),
+            Span::styled("[v]", key_style),
             Span::raw(" Toggle view"),
-        ]),
-        Line::from(vec![
+            Span::raw("  "),
             Span::styled("[f]", key_style),
             Span::raw(" Toggle format"),
         ]),
@@ -535,26 +315,12 @@ fn render_run_menu(f: &mut Frame, area: Rect, app: &App) {
             Span::styled("[b]", key_style),
             Span::raw(" Cycle bytes"),
         ]),
-        Line::from(vec![
-            Span::styled("[m]", key_style),
-            Span::raw(" Close menu"),
-            Span::raw("  "),
-            Span::styled("[Esc]", key_style),
-            Span::raw(" Close menu"),
-        ]),
+        Line::from(vec![Span::styled("[q]", key_style), Span::raw(" Close")]),
     ];
-    let menu = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Double)
-            .title(Span::styled(
-                "Menu",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )),
-    );
-    f.render_widget(menu, popup);
+
+    let block = Block::default().borders(Borders::ALL).title("Run Menu");
+    let para = Paragraph::new(lines).block(block);
+    f.render_widget(para, popup);
 }
 
 fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
@@ -631,27 +397,6 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(para, area);
 }
 
-fn render_docs(f: &mut Frame, area: Rect, app: &App) {
-    let text = DOC_TEXT;
-    // clip & scroll manually by lines
-    let lines: Vec<&str> = text.lines().collect();
-    let h = area.height.saturating_sub(2) as usize; // borders
-    let start = app.docs_scroll.min(lines.len());
-    let end = min(lines.len(), start + h);
-    let body = lines[start..end].join(
-        "
-",
-    );
-    let para = Paragraph::new(body)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Docs — Supported Instructions (Up/Down/PageUp/PageDown)"),
-        )
-        .wrap(Wrap { trim: false });
-    f.render_widget(para, area);
-}
-
 fn in_mem_range(app: &App, addr: u32) -> bool {
     (addr as usize) < app.mem_size.saturating_sub(3)
 }
@@ -694,125 +439,6 @@ fn reg_name(i: u8) -> &'static str {
     }
 }
 
-// --- Syntax highlight (very lightweight tokenizer) ---
-fn highlight_line(s: &str) -> Vec<Span<'_>> {
-    use Color::*;
-    if s.is_empty() {
-        return vec![Span::raw("")];
-    }
-
-    let mut out = Vec::new();
-
-    // preserve leading spaces exactly
-    let mut lead_len = 0usize;
-    for ch in s.chars() {
-        if ch.is_whitespace() {
-            lead_len += ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-    if lead_len > 0 {
-        out.push(Span::raw(&s[..lead_len]));
-    }
-    let trimmed = &s[lead_len..];
-
-    // find end of the first token (mnemonic/label) WITHOUT losing the following space
-    let first_end = trimmed
-        .char_indices()
-        .find(|&(_, c)| c.is_whitespace())
-        .map(|(i, _)| i)
-        .unwrap_or(trimmed.len());
-
-    let first = &trimmed[..first_end];
-    let rest = &trimmed[first_end..]; // includes the spaces immediately after the first token
-
-    if first.ends_with(':') {
-        out.push(Span::styled(first, Style::default().fg(Yellow)));
-        if !rest.is_empty() {
-            out.push(Span::raw(rest));
-        } // keep everything (including spaces)
-        return out;
-    }
-
-    // mnemonic
-    out.push(Span::styled(
-        first,
-        Style::default().fg(Cyan).add_modifier(Modifier::BOLD),
-    ));
-
-    // Operands + punctuation, preserving spaces exactly
-    let mut token = String::new();
-    for ch in rest.chars() {
-        if ",()\t ".contains(ch) {
-            if !token.is_empty() {
-                out.push(color_operand(&token));
-                token.clear();
-            }
-            out.push(Span::raw(ch.to_string())); // preserve separators and spaces
-        } else {
-            token.push(ch);
-        }
-    }
-    if !token.is_empty() {
-        out.push(color_operand(&token));
-    }
-
-    out
-}
-
-fn color_operand(tok: &str) -> Span<'static> {
-    use Color::*;
-    let is_xreg = tok.starts_with('x') && tok[1..].chars().all(|c| c.is_ascii_digit());
-    let is_alias = matches!(
-        tok,
-        "zero"
-            | "ra"
-            | "sp"
-            | "gp"
-            | "tp"
-            | "s0"
-            | "fp"
-            | "s1"
-            | "s2"
-            | "s3"
-            | "s4"
-            | "s5"
-            | "s6"
-            | "s7"
-            | "s8"
-            | "s9"
-            | "s10"
-            | "s11"
-            | "t0"
-            | "t1"
-            | "t2"
-            | "t3"
-            | "t4"
-            | "t5"
-            | "t6"
-            | "a0"
-            | "a1"
-            | "a2"
-            | "a3"
-            | "a4"
-            | "a5"
-            | "a6"
-            | "a7"
-    );
-    let is_imm = tok.starts_with("0x") || tok.parse::<i32>().is_ok();
-    let style = if is_xreg || is_alias {
-        Style::default().fg(Green)
-    } else if is_imm {
-        Style::default().fg(Magenta)
-    } else {
-        Style::default()
-    };
-    // Owned content -> Span<'static>, so it doesn't borrow from `tok`
-    Span::styled(tok.to_string(), style)
-}
-
-// ---------- Format-aware bit visualization ----------
 #[derive(Clone, Copy)]
 enum EncFormat {
     R,
@@ -827,12 +453,12 @@ fn detect_format(word: u32) -> EncFormat {
     let opc = word & 0x7f;
     match opc {
         0x33 => EncFormat::R,
-        0x13 | 0x03 | 0x67 => EncFormat::I, // op-imm, loads, jalr
+        0x13 | 0x03 | 0x67 => EncFormat::I,
         0x23 => EncFormat::S,
         0x63 => EncFormat::B,
-        0x37 | 0x17 => EncFormat::U, // lui, auipc
-        0x6f => EncFormat::J,        // jal
-        _ => EncFormat::R,           // default visualization
+        0x37 | 0x17 => EncFormat::U,
+        0x6f => EncFormat::J,
+        _ => EncFormat::R,
     }
 }
 
@@ -905,7 +531,6 @@ fn render_bit_fields(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
         ),
     };
 
-    // Visual: colored bars + labels in field order (MSB..LSB)
     let label_spans: Vec<Span> = segments
         .iter()
         .map(|(label, width, color)| {
@@ -914,7 +539,6 @@ fn render_bit_fields(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
         })
         .collect();
 
-    // Bits string for the current word
     let bit_str = format!("{:032b}", w);
     let mut bit_spans: Vec<Span> = Vec::new();
     let mut idx = 0usize;
@@ -957,7 +581,7 @@ fn render_field_values(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
             )));
         }
         EncFormat::I => {
-            let imm = (((w >> 20) as i32) << 20) >> 20; // sign-extend 12
+            let imm = (((w >> 20) as i32) << 20) >> 20;
             let rs1 = (w >> 15) & 0x1f;
             let funct3 = (w >> 12) & 0x7;
             let rd = (w >> 7) & 0x1f;
@@ -967,7 +591,6 @@ fn render_field_values(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
                 imm, rs1, funct3, rd, opcode
             )));
             if matches!(funct3, 0x1 | 0x5) {
-                // SLLI/SRLI/SRAI
                 let shamt = (w >> 20) & 0x1f;
                 let f7 = (w >> 25) & 0x7f;
                 text.push(Line::from(format!(
@@ -1031,7 +654,6 @@ fn render_field_values(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
     f.render_widget(para, inner);
 }
 
-// ---------- Disassembly helper using your decoder ----------
 fn disasm_word(w: u32) -> String {
     match falcon::decoder::decode(w) {
         Ok(ins) => pretty_instr(&ins),
@@ -1042,7 +664,6 @@ fn disasm_word(w: u32) -> String {
 fn pretty_instr(i: &falcon::instruction::Instruction) -> String {
     use falcon::instruction::Instruction::*;
     match *i {
-        // R-type
         Add { rd, rs1, rs2 } => format!("add  x{rd}, x{rs1}, x{rs2}"),
         Sub { rd, rs1, rs2 } => format!("sub  x{rd}, x{rs1}, x{rs2}"),
         And { rd, rs1, rs2 } => format!("and  x{rd}, x{rs1}, x{rs2}"),
@@ -1061,7 +682,6 @@ fn pretty_instr(i: &falcon::instruction::Instruction) -> String {
         Divu { rd, rs1, rs2 } => format!("divu x{rd}, x{rs1}, x{rs2}"),
         Rem { rd, rs1, rs2 } => format!("rem  x{rd}, x{rs1}, x{rs2}"),
         Remu { rd, rs1, rs2 } => format!("remu x{rd}, x{rs1}, x{rs2}"),
-        // I-type
         Addi { rd, rs1, imm } => format!("addi x{rd}, x{rs1}, {imm}"),
         Andi { rd, rs1, imm } => format!("andi x{rd}, x{rs1}, {imm}"),
         Ori { rd, rs1, imm } => format!("ori  x{rd}, x{rs1}, {imm}"),
@@ -1071,64 +691,25 @@ fn pretty_instr(i: &falcon::instruction::Instruction) -> String {
         Slli { rd, rs1, shamt } => format!("slli x{rd}, x{rs1}, {shamt}"),
         Srli { rd, rs1, shamt } => format!("srli x{rd}, x{rs1}, {shamt}"),
         Srai { rd, rs1, shamt } => format!("srai x{rd}, x{rs1}, {shamt}"),
-        // Loads
         Lb { rd, rs1, imm } => format!("lb   x{rd}, {imm}(x{rs1})"),
         Lh { rd, rs1, imm } => format!("lh   x{rd}, {imm}(x{rs1})"),
         Lw { rd, rs1, imm } => format!("lw   x{rd}, {imm}(x{rs1})"),
         Lbu { rd, rs1, imm } => format!("lbu  x{rd}, {imm}(x{rs1})"),
         Lhu { rd, rs1, imm } => format!("lhu  x{rd}, {imm}(x{rs1})"),
-        // Stores
         Sb { rs2, rs1, imm } => format!("sb   x{rs2}, {imm}(x{rs1})"),
         Sh { rs2, rs1, imm } => format!("sh   x{rs2}, {imm}(x{rs1})"),
         Sw { rs2, rs1, imm } => format!("sw   x{rs2}, {imm}(x{rs1})"),
-        // Branches
         Beq { rs1, rs2, imm } => format!("beq  x{rs1}, x{rs2}, {imm}"),
         Bne { rs1, rs2, imm } => format!("bne  x{rs1}, x{rs2}, {imm}"),
         Blt { rs1, rs2, imm } => format!("blt  x{rs1}, x{rs2}, {imm}"),
         Bge { rs1, rs2, imm } => format!("bge  x{rs1}, x{rs2}, {imm}"),
         Bltu { rs1, rs2, imm } => format!("bltu x{rs1}, x{rs2}, {imm}"),
         Bgeu { rs1, rs2, imm } => format!("bgeu x{rs1}, x{rs2}, {imm}"),
-        // U/J
         Lui { rd, imm } => format!("lui  x{rd}, {imm}"),
         Auipc { rd, imm } => format!("auipc x{rd}, {imm}"),
         Jal { rd, imm } => format!("jal  x{rd}, {imm}"),
-        // JALR & system
         Jalr { rd, rs1, imm } => format!("jalr x{rd}, x{rs1}, {imm}"),
         Ecall => "ecall".to_string(),
         Ebreak => "ebreak".to_string(),
     }
 }
-
-// --- Static docs text (short version synced with docs/format.md) ---
-const DOC_TEXT: &str = r#"Falcon ASM — Supported Instructions (RV32I MVP)
-
-R-type (opcode 0x33):
-  ADD, SUB, AND, OR, XOR, SLL, SRL, SRA, SLT, SLTU, MUL, MULH,
-  MULHSU, MULHU, DIV, DIVU, REM, REMU
-
-I-type (opcode 0x13):
-  ADDI, ANDI, ORI, XORI, SLTI, SLTIU, SLLI, SRLI, SRAI
-
-Loads (opcode 0x03):
-  LB, LH, LW, LBU, LHU
-
-Stores (opcode 0x23):
-  SB, SH, SW
-
-Branches (opcode 0x63):
-  BEQ, BNE, BLT, BGE, BLTU, BGEU
-
-Upper immediates:
-  LUI (0x37), AUIPC (0x17)
-
-Jumps:
-  JAL (0x6F), JALR (0x67)
-
-System:
-  ECALL (0x00000073), EBREAK (0x00100073)
-
-Notes:
-• PC advances +4 each instruction. Branch/JAL immediates are byte offsets (must be even).
-• Loads/Stores syntax: imm(rs1). Labels supported by 2-pass assembler.
-• Pseudoinstructions: nop, mv, li(12-bit), j, jr, ret, subi.
-"#;
