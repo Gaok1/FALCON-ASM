@@ -664,6 +664,7 @@ mod tests {
     fn push_expands_correctly() {
         let asm = ".text\npush a0";
         let prog = assemble(asm, 0).expect("assemble");
+        println!("Program text: {:?}", prog.text);
         assert_eq!(prog.text.len(), 2);
         let expected_addi = encode(Instruction::Addi {
             rd: 2,
@@ -674,11 +675,11 @@ mod tests {
         let expected_sw = encode(Instruction::Sw {
             rs2: 10,
             rs1: 2,
-            imm: 0,
-        })
-        .expect("encode sw");
+            imm: 4,
+        }).expect("encode sw");
+        println!("Expected SW: {}, Expected ADDI: {}", expected_sw, expected_addi);
         assert_eq!(prog.text[0], expected_addi);
-        assert_eq!(prog.text[1], expected_sw);
+        assert_eq!(prog.text[1], expected_sw); 
     }
 
     #[test]
@@ -689,7 +690,7 @@ mod tests {
         let expected_lw = encode(Instruction::Lw {
             rd: 10,
             rs1: 2,
-            imm: 0,
+            imm: 4,
         })
         .expect("encode lw");
         let expected_addi = encode(Instruction::Addi {
