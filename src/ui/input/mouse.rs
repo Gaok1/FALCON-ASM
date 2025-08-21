@@ -1,5 +1,5 @@
 use crate::ui::{
-    app::{App, EditorMode, MemRegion, RunHover, Tab},
+    app::{App, EditorMode, MemRegion, Tab},
     editor::Editor,
 };
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -8,6 +8,11 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
     app.mouse_x = me.column;
     app.mouse_y = me.row;
+
+    if app.show_exit_popup {
+        handle_exit_popup_mouse(app, me, area);
+        return;
+    }
 
     // Hover tabs
     app.hover_tab = None;
@@ -150,161 +155,9 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
 
     // Run tab interactions
     if let Tab::Run = app.tab {
-        if matches!(me.kind, MouseEventKind::Moved) {
-            app.hover_run = if app.show_menu {
-                compute_run_menu_hover(app, me, area)
-            } else {
-                compute_run_status_hover(app, me, area)
-            };
-        }
-
         if matches!(me.kind, MouseEventKind::Down(MouseButton::Left)) {
-            if app.show_menu {
-                handle_run_menu_click(app, me, area);
-            } else {
-                handle_run_status_click(app, me, area);
-            }
+            handle_run_status_click(app, me, area);
         }
-    }
-}
-
-fn compute_run_status_hover(app: &App, me: MouseEvent, area: Rect) -> RunHover {
-    let root = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(1),
-        ])
-        .split(area);
-    let run = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(4),
-            Constraint::Min(0),
-        ])
-        .split(root[1]);
-    let status = run[1];
-    if me.row != status.y + 1 {
-        return RunHover::None;
-    }
-
-    let view = if app.show_registers { "REGS" } else { "RAM" };
-    let fmt = if app.show_hex { "HEX" } else { "DEC" };
-    let bytes = match app.mem_view_bytes {
-        4 => "4B",
-        2 => "2B",
-        _ => "1B",
-    };
-    let region = match app.mem_region {
-        MemRegion::Data => "DATA",
-        MemRegion::Stack => "STACK",
-        MemRegion::Custom => "ADDR",
-    };
-    let state = if app.is_running { "RUN" } else { "PAUSE" };
-
-    let mut pos = status.x + 1;
-    let col = me.column;
-
-    let range = |start: &mut u16, label: &str| {
-        let s = *start;
-        *start += label.len() as u16;
-        (s, *start)
-    };
-    let skip = |start: &mut u16, s: &str| {
-        *start += s.len() as u16;
-    };
-
-    skip(&mut pos, "View: ");
-    let (v0, v1) = range(&mut pos, view);
-
-    skip(&mut pos, "  Format: ");
-    let (f0, f1) = range(&mut pos, fmt);
-
-    let (b0, b1) = if !app.show_registers {
-        skip(&mut pos, "  Bytes: ");
-        range(&mut pos, bytes)
-    } else {
-        (0, 0)
-    };
-
-    skip(&mut pos, "  Region: ");
-    let (r0, r1) = range(&mut pos, region);
-
-    skip(&mut pos, "  State: ");
-    let (s0, s1) = range(&mut pos, state);
-
-    if col >= v0 && col < v1 {
-        RunHover::View
-    } else if col >= f0 && col < f1 {
-        RunHover::Format
-    } else if !app.show_registers && col >= b0 && col < b1 {
-        RunHover::Bytes
-    } else if col >= r0 && col < r1 {
-        RunHover::Region
-    } else if col >= s0 && col < s1 {
-        RunHover::State
-    } else {
-        RunHover::None
-    }
-}
-
-fn compute_run_menu_hover(app: &App, me: MouseEvent, area: Rect) -> RunHover {
-    let popup = centered_rect(area.width / 2, area.height / 2, area);
-    if me.column < popup.x + 1
-        || me.column >= popup.x + popup.width - 1
-        || me.row < popup.y + 1
-        || me.row >= popup.y + popup.height - 1
-    {
-        return RunHover::None;
-    }
-    let x = me.column - (popup.x + 1);
-    let y = me.row - (popup.y + 1);
-
-    match y {
-        2 => {
-            let step = "[s] Step";
-            let run = "[r] Run";
-            let pause = "[p] Pause";
-            let mut pos: u16 = 0;
-            if x < step.len() as u16 {
-                return RunHover::MStep;
-            }
-            pos += step.len() as u16 + 2;
-            if x >= pos && x < pos + run.len() as u16 {
-                return RunHover::MRun;
-            }
-            pos += run.len() as u16 + 2;
-            if x >= pos && x < pos + pause.len() as u16 {
-                return RunHover::MPause;
-            }
-            RunHover::None
-        }
-        3 => {
-            let d = "[d] View data";
-            let k = "[k] View stack";
-            let mut pos: u16 = 0;
-            if x < d.len() as u16 {
-                return RunHover::MViewData;
-            }
-            pos += d.len() as u16 + 2;
-            if x >= pos && x < pos + k.len() as u16 {
-                return RunHover::MViewStack;
-            }
-            RunHover::None
-        }
-        4 => RunHover::MToggleView,
-        5 => RunHover::MToggleFormat,
-        6 => {
-            if app.show_registers {
-                RunHover::None
-            } else {
-                RunHover::MCycleBytes
-            }
-        }
-        7 => RunHover::MClose,
-        _ => RunHover::None,
     }
 }
 
@@ -348,35 +201,35 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
 
     let range = |start: &mut u16, label: &str| {
         let s = *start;
-        *start += label.len() as u16;
+        *start += 1 + label.len() as u16 + 1;
         (s, *start)
     };
     let skip = |start: &mut u16, s: &str| {
         *start += s.len() as u16;
     };
 
-    skip(&mut pos, "View: ");
+    skip(&mut pos, "View ");
     let (view_start, view_end) = range(&mut pos, view_text);
 
-    skip(&mut pos, "  Format: ");
+    skip(&mut pos, "  Format ");
     let (fmt_start, fmt_end) = range(&mut pos, fmt_text);
 
     let (bytes_start, bytes_end) = if !app.show_registers {
-        skip(&mut pos, "  Bytes: ");
+        skip(&mut pos, "  Bytes ");
         range(&mut pos, bytes_text)
     } else {
         (0, 0)
     };
 
-    skip(&mut pos, "  Region: ");
-    let region_start = pos;
-    pos += region_text.len() as u16;
-    let region_end = pos;
+    let (region_start, region_end) = if !app.show_registers {
+        skip(&mut pos, "  Region ");
+        range(&mut pos, region_text)
+    } else {
+        (0, 0)
+    };
 
-    skip(&mut pos, "  State: ");
-    let state_start = pos;
-    pos += run_text.len() as u16;
-    let state_end = pos;
+    skip(&mut pos, "  State ");
+    let (state_start, state_end) = range(&mut pos, run_text);
 
     let col = me.column;
     if col >= view_start && col < view_end {
@@ -410,78 +263,38 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
     }
 }
 
-fn handle_run_menu_click(app: &mut App, me: MouseEvent, area: Rect) {
-    let popup = centered_rect(area.width / 2, area.height / 2, area);
+fn handle_exit_popup_mouse(app: &mut App, me: MouseEvent, area: Rect) {
+    let popup = centered_rect(area.width / 3, area.height / 4, area);
+    if me.kind != MouseEventKind::Down(MouseButton::Left) {
+        return;
+    }
     if me.column < popup.x + 1
         || me.column >= popup.x + popup.width - 1
         || me.row < popup.y + 1
         || me.row >= popup.y + popup.height - 1
     {
-        app.show_menu = false;
+        app.show_exit_popup = false;
         return;
     }
     let inner_x = me.column - (popup.x + 1);
     let inner_y = me.row - (popup.y + 1);
-    match inner_y {
-        2 => {
-            const STEP: &str = "[s] Step";
-            const RUN: &str = "[r] Run";
-            const PAUSE: &str = "[p] Pause";
-            let mut x = 0u16;
-            if inner_x < STEP.len() as u16 {
-                app.single_step();
-            } else {
-                x += STEP.len() as u16 + 2;
-                if inner_x >= x && inner_x < x + RUN.len() as u16 {
-                    if !app.faulted {
-                        app.is_running = true;
-                    }
-                } else {
-                    x += RUN.len() as u16 + 2;
-                    if inner_x >= x && inner_x < x + PAUSE.len() as u16 {
-                        app.is_running = false;
-                    }
-                }
-            }
+    const EXIT: &str = "[Exit]";
+    const CANCEL: &str = "[Cancel]";
+    const GAP: u16 = 3;
+    if inner_y == 3 {
+        let line_width = EXIT.len() as u16 + GAP + CANCEL.len() as u16;
+        let start = ((popup.width - 2).saturating_sub(line_width)) / 2;
+        if inner_x >= start && inner_x < start + EXIT.len() as u16 {
+            app.should_quit = true;
+        } else if inner_x
+            >= start + EXIT.len() as u16 + GAP
+            && inner_x < start + EXIT.len() as u16 + GAP + CANCEL.len() as u16
+        {
+            app.show_exit_popup = false;
         }
-        3 => {
-            const DATA: &str = "[d] View data";
-            const STACK: &str = "[k] View stack";
-            let mut x = 0u16;
-            if inner_x < DATA.len() as u16 {
-                app.mem_view_addr = app.data_base;
-                app.mem_region = MemRegion::Data;
-                app.show_registers = false;
-            } else {
-                x += DATA.len() as u16 + 2;
-                if inner_x >= x && inner_x < x + STACK.len() as u16 {
-                    app.mem_view_addr = app.cpu.x[2];
-                    app.mem_region = MemRegion::Stack;
-                    app.show_registers = false;
-                }
-            }
-        }
-        4 => {
-            app.show_registers = !app.show_registers;
-        }
-        5 => {
-            app.show_hex = !app.show_hex;
-        }
-        6 => {
-            if !app.show_registers {
-                app.mem_view_bytes = match app.mem_view_bytes {
-                    4 => 2,
-                    2 => 1,
-                    _ => 4,
-                };
-            }
-        }
-        7 => {
-            app.show_menu = false;
-        }
-        _ => {}
     }
 }
+
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     Rect::new(

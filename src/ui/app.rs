@@ -34,30 +34,9 @@ pub(super) enum MemRegion {
     Custom,
 }
 
-// NOVOS CAMPOS DE ESTADO
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum RunHover {
-    None,
-    View,
-    Format,
-    Bytes,
-    Region,
-    State, // barra de status da aba Run
-    MStep,
-    MRun,
-    MPause, // popup: linha 1
-    MViewData,
-    MViewStack, // popup: linha 2
-    MToggleView,
-    MToggleFormat,
-    MCycleBytes, // popup: linhas 3–5
-    MClose,      // popup: fechar
-}
-
 pub struct App {
     pub(super) tab: Tab,
     pub(super) mode: EditorMode,
-    pub hover_run: RunHover,
     // Editor state
     pub(super) editor: Editor,
     pub(super) editor_dirty: bool,
@@ -89,7 +68,8 @@ pub struct App {
     pub(super) last_step_time: Instant,
     pub(super) step_interval: Duration,
     pub(super) faulted: bool,
-    pub(super) show_menu: bool,
+    pub(super) show_exit_popup: bool,
+    pub(super) should_quit: bool,
 
     // Docs state
     pub(super) docs_scroll: usize,
@@ -137,8 +117,8 @@ impl App {
             last_step_time: Instant::now(),
             step_interval: Duration::from_millis(80),
             faulted: false,
-            show_menu: false,
-            hover_run: RunHover::None,
+            show_exit_popup: false,
+            should_quit: false,
             docs_scroll: 0,
             mouse_x: 0,
             mouse_y: 0,
@@ -255,7 +235,7 @@ impl App {
 
 pub fn run(terminal: &mut DefaultTerminal, mut app: App) -> io::Result<()> {
     execute!(terminal.backend_mut(), EnableMouseCapture)?;
-    let mut last_draw = Instant::now();
+    let last_draw = Instant::now();
     loop {
         // Input
         if event::poll(Duration::from_millis(10))? {
@@ -269,9 +249,15 @@ pub fn run(terminal: &mut DefaultTerminal, mut app: App) -> io::Result<()> {
                     let size = terminal.size()?;
                     let area = Rect::new(0, 0, size.width, size.height);
                     handle_mouse(&mut app, me, area);
+                    if app.should_quit {
+                        break;
+                    }
                 }
                 _ => {}
             }
+        }
+        if app.should_quit {
+            break;
         }
         // Tick/run
         app.tick();
