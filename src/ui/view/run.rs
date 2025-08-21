@@ -245,9 +245,10 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
     let button = |text: &str, color: Color, hovered: bool| {
         let mut style = Style::default().fg(Color::Black).bg(color);
         if hovered {
-            style = style.add_modifier(Modifier::BOLD);
+            // Destaque no hover usando negrito; Color não expõe r/g/b para todos os variantes.
+            style = style.add_modifier(Modifier::ITALIC);
         } else {
-            style = style.add_modifier(Modifier::DIM);
+            style = style.add_modifier(Modifier::DIM).bg(color); // Se não estiver hover, usar a cor original
         }
         Span::styled(format!("[{text}]"), style)
     };

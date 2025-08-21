@@ -72,7 +72,7 @@ alocate_tree_node:
     sw t6, 4(t2)
     sw t6, 8(t2)
 
-    addi t1
+    addi t1, t1,1
     la t0,len
     sw t1, 0(t0)
     mv s0,t6
