@@ -1,4 +1,7 @@
-use crate::ui::app::{App, MemRegion, RunHover, Tab};
+use crate::ui::{
+    app::{App, MemRegion, RunHover, Tab},
+    editor::Editor,
+};
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
@@ -66,6 +69,77 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
             Tab::Docs => app.docs_scroll += 1,
         },
         _ => {}
+    }
+
+    if let Tab::Editor = app.tab {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(1),
+            ])
+            .split(area);
+        let editor_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(5), Constraint::Min(3)])
+            .split(chunks[1]);
+        let editor_area = editor_chunks[1];
+
+        let start = {
+            let visible_h = editor_area.height.saturating_sub(2) as usize;
+            let len = app.editor.lines.len();
+            let mut s = 0usize;
+            if len > visible_h {
+                if app.editor.cursor_row <= visible_h / 2 {
+                    s = 0;
+                } else if app.editor.cursor_row >= len.saturating_sub(visible_h / 2) {
+                    s = len.saturating_sub(visible_h);
+                } else {
+                    s = app.editor.cursor_row - visible_h / 2;
+                }
+            }
+            s
+        };
+
+        let within = |x: u16, y: u16| {
+            x >= editor_area.x + 1
+                && x < editor_area.x + editor_area.width - 1
+                && y >= editor_area.y + 1
+                && y < editor_area.y + editor_area.height - 1
+        };
+
+        match me.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if within(me.column, me.row) {
+                    let y = (me.row - (editor_area.y + 1)) as usize;
+                    let row = (start + y).min(app.editor.lines.len().saturating_sub(1));
+                    let x = me.column.saturating_sub(editor_area.x + 1) as usize;
+                    let col = x.min(Editor::char_count(&app.editor.lines[row]));
+                    app.editor.cursor_row = row;
+                    app.editor.cursor_col = col;
+                    app.editor.selection_anchor = Some((row, col));
+                }
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if within(me.column, me.row) {
+                    let y = (me.row - (editor_area.y + 1)) as usize;
+                    let row = (start + y).min(app.editor.lines.len().saturating_sub(1));
+                    let x = me.column.saturating_sub(editor_area.x + 1) as usize;
+                    let col = x.min(Editor::char_count(&app.editor.lines[row]));
+                    app.editor.cursor_row = row;
+                    app.editor.cursor_col = col;
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                if let Some((r, c)) = app.editor.selection_anchor {
+                    if r == app.editor.cursor_row && c == app.editor.cursor_col {
+                        app.editor.clear_selection();
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     // Run tab interactions

@@ -136,6 +136,26 @@ impl Editor {
         }
     }
 
+    pub fn tab(&mut self) {
+        if let Some(((sr, _), (er, _))) = self.selection_range() {
+            for row in sr..=er {
+                if row < self.lines.len() {
+                    self.lines[row].insert_str(0, "    ");
+                }
+            }
+            if let Some((ar, ac)) = self.selection_anchor {
+                if ar >= sr && ar <= er {
+                    self.selection_anchor = Some((ar, ac + 4));
+                }
+            }
+            if self.cursor_row >= sr && self.cursor_row <= er {
+                self.cursor_col += 4;
+            }
+        } else {
+            self.insert_spaces(4);
+        }
+    }
+
     pub fn backspace(&mut self) {
         if let Some((start, end)) = self.selection_range() {
             self.delete_range(start, end);
