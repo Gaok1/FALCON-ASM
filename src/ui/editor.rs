@@ -1,10 +1,20 @@
 // ---------- Simple text editor with lightweight syntax highlighting ----------
+use std::collections::VecDeque;
+
+#[derive(Clone)]
+struct EditorState {
+    lines: Vec<String>,
+    cursor_row: usize,
+    cursor_col: usize,
+}
+
 #[derive(Default)]
 pub struct Editor {
     pub lines: Vec<String>,
     pub cursor_row: usize,
     pub cursor_col: usize,
     pub selection_anchor: Option<(usize, usize)>,
+    history: VecDeque<EditorState>,
 }
 
 impl Editor {
@@ -22,6 +32,27 @@ impl Editor {
             cursor_row: 0,
             cursor_col: 0,
             selection_anchor: None,
+            history: VecDeque::new(),
+        }
+    }
+
+    fn snapshot(&mut self) {
+        if self.history.len() == 15 {
+            self.history.pop_front();
+        }
+        self.history.push_back(EditorState {
+            lines: self.lines.clone(),
+            cursor_row: self.cursor_row,
+            cursor_col: self.cursor_col,
+        });
+    }
+
+    pub fn undo(&mut self) {
+        if let Some(state) = self.history.pop_back() {
+            self.lines = state.lines;
+            self.cursor_row = state.cursor_row;
+            self.cursor_col = state.cursor_col;
+            self.clear_selection();
         }
     }
 
@@ -91,6 +122,33 @@ impl Editor {
         })
     }
 
+    pub fn selected_text(&self) -> Option<String> {
+        self.selection_range().map(|(start, end)| {
+            let (sr, sc) = start;
+            let (er, ec) = end;
+            if sr == er {
+                let line = &self.lines[sr];
+                let sb = Self::byte_at(line, sc);
+                let eb = Self::byte_at(line, ec);
+                line[sb..eb].to_string()
+            } else {
+                let mut out = String::new();
+                let first = &self.lines[sr];
+                let sb = Self::byte_at(first, sc);
+                out.push_str(&first[sb..]);
+                out.push('\n');
+                for row in sr + 1..er {
+                    out.push_str(&self.lines[row]);
+                    out.push('\n');
+                }
+                let last = &self.lines[er];
+                let eb = Self::byte_at(last, ec);
+                out.push_str(&last[..eb]);
+                out
+            }
+        })
+    }
+
     fn delete_range(&mut self, start: (usize, usize), end: (usize, usize)) {
         let (sr, sc) = start;
         let (er, ec) = end;
@@ -118,25 +176,35 @@ impl Editor {
         self.clear_selection();
     }
 
-    pub fn insert_char(&mut self, ch: char) {
-        if let Some((start, end)) = self.selection_range() {
-            self.delete_range(start, end);
-        }
+    fn insert_char_internal(&mut self, ch: char) {
         self.ensure_line();
         let line = self.current_line();
         let col = self.cursor_col.min(Self::char_count(line));
         let byte_idx = Self::byte_at(line, col);
         self.current_line_mut().insert(byte_idx, ch);
-        self.cursor_col = col + 1; // inserting advances the cursor
+        self.cursor_col = col + 1;
+    }
+
+    pub fn insert_char(&mut self, ch: char) {
+        self.snapshot();
+        if let Some((start, end)) = self.selection_range() {
+            self.delete_range(start, end);
+        }
+        self.insert_char_internal(ch);
     }
 
     pub fn insert_spaces(&mut self, n: usize) {
+        self.snapshot();
+        if let Some((start, end)) = self.selection_range() {
+            self.delete_range(start, end);
+        }
         for _ in 0..n {
-            self.insert_char(' ');
+            self.insert_char_internal(' ');
         }
     }
 
     pub fn tab(&mut self) {
+        self.snapshot();
         if let Some(((sr, _), (er, _))) = self.selection_range() {
             for row in sr..=er {
                 if row < self.lines.len() {
@@ -152,11 +220,14 @@ impl Editor {
                 self.cursor_col += 4;
             }
         } else {
-            self.insert_spaces(4);
+            for _ in 0..4 {
+                self.insert_char_internal(' ');
+            }
         }
     }
 
     pub fn backspace(&mut self) {
+        self.snapshot();
         if let Some((start, end)) = self.selection_range() {
             self.delete_range(start, end);
             return;
@@ -184,6 +255,7 @@ impl Editor {
     }
 
     pub fn delete_char(&mut self) {
+        self.snapshot();
         if let Some((start, end)) = self.selection_range() {
             self.delete_range(start, end);
             return;
@@ -208,6 +280,7 @@ impl Editor {
     }
 
     pub fn enter(&mut self) {
+        self.snapshot();
         if let Some((start, end)) = self.selection_range() {
             self.delete_range(start, end);
         }

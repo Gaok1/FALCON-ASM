@@ -1,5 +1,5 @@
 use crate::ui::{
-    app::{App, MemRegion, RunHover, Tab},
+    app::{App, EditorMode, MemRegion, RunHover, Tab},
     editor::Editor,
 };
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -26,6 +26,7 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
                 app.hover_tab = Some(*tab);
                 if matches!(me.kind, MouseEventKind::Down(MouseButton::Left)) {
                     app.tab = *tab;
+                    app.mode = EditorMode::Command;
                 }
                 break;
             }
@@ -119,6 +120,11 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
                     app.editor.cursor_row = row;
                     app.editor.cursor_col = col;
                     app.editor.selection_anchor = Some((row, col));
+                    if app.mode == EditorMode::Command {
+                        app.mode = EditorMode::Insert;
+                    }
+                } else if app.mode == EditorMode::Insert {
+                    app.mode = EditorMode::Command;
                 }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
