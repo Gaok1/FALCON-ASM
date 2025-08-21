@@ -1,5 +1,5 @@
 use crate::ui::{
-    app::{App, EditorMode, MemRegion, Tab},
+    app::{App, EditorMode, MemRegion, RunButton, Tab},
     editor::Editor,
 };
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -16,6 +16,7 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
 
     // Hover tabs
     app.hover_tab = None;
+    app.hover_run_button = None;
     if me.row == area.y + 1 {
         let x = me.column.saturating_sub(area.x + 1);
         let titles = [
@@ -155,6 +156,7 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
 
     // Run tab interactions
     if let Tab::Run = app.tab {
+        update_run_status_hover(app, me, area);
         if matches!(me.kind, MouseEventKind::Down(MouseButton::Left)) {
             handle_run_status_click(app, me, area);
         }
@@ -162,6 +164,58 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
 }
 
 fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
+    let status = run_status_area(area);
+    if me.row != status.y + 1 {
+        return;
+    }
+    if let Some(btn) = run_status_hit(app, status, me.column) {
+        match btn {
+            RunButton::View => {
+                app.show_registers = !app.show_registers;
+            }
+            RunButton::Format => {
+                app.show_hex = !app.show_hex;
+            }
+            RunButton::Bytes => {
+                app.mem_view_bytes = match app.mem_view_bytes {
+                    4 => 2,
+                    2 => 1,
+                    _ => 4,
+                };
+            }
+            RunButton::Region => {
+                app.mem_region = match app.mem_region {
+                    MemRegion::Data => {
+                        app.mem_view_addr = app.cpu.x[2];
+                        MemRegion::Stack
+                    }
+                    MemRegion::Stack => MemRegion::Custom,
+                    MemRegion::Custom => {
+                        app.mem_view_addr = app.data_base;
+                        MemRegion::Data
+                    }
+                };
+            }
+            RunButton::State => {
+                if app.is_running {
+                    app.is_running = false;
+                } else if !app.faulted {
+                    app.is_running = true;
+                }
+            }
+        }
+    }
+}
+
+fn update_run_status_hover(app: &mut App, me: MouseEvent, area: Rect) {
+    let status = run_status_area(area);
+    if me.row != status.y + 1 {
+        return;
+    }
+    app.hover_run_button = run_status_hit(app, status, me.column);
+}
+
+fn run_status_area(area: Rect) -> Rect {
     let root_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -178,11 +232,10 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
             Constraint::Min(0),
         ])
         .split(root_chunks[1]);
-    let status = run_chunks[1];
-    if me.row != status.y + 1 {
-        return;
-    }
+    run_chunks[1]
+}
 
+fn run_status_hit(app: &App, status: Rect, col: u16) -> Option<RunButton> {
     let view_text = if app.show_registers { "REGS" } else { "RAM" };
     let fmt_text = if app.show_hex { "HEX" } else { "DEC" };
     let bytes_text = match app.mem_view_bytes {
@@ -198,7 +251,6 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
     let run_text = if app.is_running { "RUN" } else { "PAUSE" };
 
     let mut pos = status.x + 1;
-
     let range = |start: &mut u16, label: &str| {
         let s = *start;
         *start += 1 + label.len() as u16 + 1;
@@ -231,35 +283,18 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
     skip(&mut pos, "  State ");
     let (state_start, state_end) = range(&mut pos, run_text);
 
-    let col = me.column;
     if col >= view_start && col < view_end {
-        app.show_registers = !app.show_registers;
+        Some(RunButton::View)
     } else if col >= fmt_start && col < fmt_end {
-        app.show_hex = !app.show_hex;
+        Some(RunButton::Format)
     } else if !app.show_registers && col >= bytes_start && col < bytes_end {
-        app.mem_view_bytes = match app.mem_view_bytes {
-            4 => 2,
-            2 => 1,
-            _ => 4,
-        };
+        Some(RunButton::Bytes)
     } else if !app.show_registers && col >= region_start && col < region_end {
-        app.mem_region = match app.mem_region {
-            MemRegion::Data => {
-                app.mem_view_addr = app.cpu.x[2];
-                MemRegion::Stack
-            }
-            MemRegion::Stack => MemRegion::Custom,
-            MemRegion::Custom => {
-                app.mem_view_addr = app.data_base;
-                MemRegion::Data
-            }
-        };
+        Some(RunButton::Region)
     } else if col >= state_start && col < state_end {
-        if app.is_running {
-            app.is_running = false;
-        } else if !app.faulted {
-            app.is_running = true;
-        }
+        Some(RunButton::State)
+    } else {
+        None
     }
 }
 
@@ -286,15 +321,13 @@ fn handle_exit_popup_mouse(app: &mut App, me: MouseEvent, area: Rect) {
         let start = ((popup.width - 2).saturating_sub(line_width)) / 2;
         if inner_x >= start && inner_x < start + EXIT.len() as u16 {
             app.should_quit = true;
-        } else if inner_x
-            >= start + EXIT.len() as u16 + GAP
+        } else if inner_x >= start + EXIT.len() as u16 + GAP
             && inner_x < start + EXIT.len() as u16 + GAP + CANCEL.len() as u16
         {
             app.show_exit_popup = false;
         }
     }
 }
-
 
 fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
     Rect::new(
