@@ -1,15 +1,9 @@
 use crate::falcon::{self, memory::Bus};
 use ratatui::Frame;
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, Table, Wrap};
+use ratatui::widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap};
 
 use super::{App, MemRegion};
-
-fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
-    let cw = r.width.saturating_sub(width) / 2;
-    let ch = r.height.saturating_sub(height) / 2;
-    Rect::new(r.x + cw, r.y + ch, width.min(r.width), height.min(r.height))
-}
 
 pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
@@ -61,7 +55,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     if app.show_registers {
         let reg_block = Block::default()
             .borders(Borders::ALL)
-            .title("Registers — s:step r:run p:pause m:menu");
+            .title("Registers — s:step r:run p:pause");
         let inner = reg_block.inner(cols[0]);
         let lines = inner.height.saturating_sub(2) as usize;
         let total = 33usize; // PC + x0..x31
@@ -114,7 +108,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     } else {
         let mem_block = Block::default()
             .borders(Borders::ALL)
-            .title("RAM Memory — s:step r:run p:pause m:menu");
+            .title("RAM Memory — s:step r:run p:pause");
         f.render_widget(mem_block.clone(), cols[0]);
 
         let inner = mem_block.inner(cols[0]);
@@ -230,97 +224,6 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     render_bit_fields(f, mid_chunks[1], cur_word, fmt);
     render_field_values(f, mid_chunks[2], cur_word, fmt);
 
-    if app.show_menu {
-        render_run_menu(f, area, app);
-    }
-}
-
-fn render_run_menu(f: &mut Frame, area: Rect, app: &App) {
-    let popup = centered_rect(area.width / 2, area.height / 2, area);
-    f.render_widget(Clear, popup);
-
-    let key_style = Style::default()
-        .fg(Color::Yellow)
-        .add_modifier(Modifier::BOLD);
-
-    let (view_text, view_color) = if app.show_registers {
-        ("REGS", Color::Blue)
-    } else {
-        ("RAM", Color::Green)
-    };
-    let (fmt_text, fmt_color) = if app.show_hex {
-        ("HEX", Color::Magenta)
-    } else {
-        ("DEC", Color::Cyan)
-    };
-    let (region_text, region_color) = match app.mem_region {
-        MemRegion::Data => ("DATA", Color::Yellow),
-        MemRegion::Stack => ("STACK", Color::LightBlue),
-        MemRegion::Custom => ("ADDR", Color::Gray),
-    };
-    let bytes_text = match app.mem_view_bytes {
-        4 => "4B",
-        2 => "2B",
-        _ => "1B",
-    };
-    let (run_text, run_color) = if app.is_running {
-        ("RUN", Color::Green)
-    } else {
-        ("PAUSE", Color::Red)
-    };
-
-    let mut status = vec![
-        Span::raw("View: "),
-        Span::styled(view_text, Style::default().fg(view_color)),
-        Span::raw("  Format: "),
-        Span::styled(fmt_text, Style::default().fg(fmt_color)),
-    ];
-    if !app.show_registers {
-        status.push(Span::raw("  Bytes: "));
-        status.push(Span::styled(bytes_text, Style::default().fg(Color::Yellow)));
-    }
-    status.push(Span::raw("  Region: "));
-    status.push(Span::styled(region_text, Style::default().fg(region_color)));
-    status.push(Span::raw("  State: "));
-    status.push(Span::styled(run_text, Style::default().fg(run_color)));
-
-    let lines = vec![
-        Line::from(status),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("[s]", key_style),
-            Span::raw(" Step"),
-            Span::raw("  "),
-            Span::styled("[r]", key_style),
-            Span::raw(" Run"),
-            Span::raw("  "),
-            Span::styled("[p]", key_style),
-            Span::raw(" Pause"),
-        ]),
-        Line::from(vec![
-            Span::styled("[d]", key_style),
-            Span::raw(" View data"),
-            Span::raw("  "),
-            Span::styled("[k]", key_style),
-            Span::raw(" View stack"),
-        ]),
-        Line::from(vec![
-            Span::styled("[v]", key_style),
-            Span::raw(" Toggle view"),
-            Span::raw("  "),
-            Span::styled("[f]", key_style),
-            Span::raw(" Toggle format"),
-        ]),
-        Line::from(vec![
-            Span::styled("[b]", key_style),
-            Span::raw(" Cycle bytes"),
-        ]),
-        Line::from(vec![Span::styled("[q]", key_style), Span::raw(" Close")]),
-    ];
-
-    let block = Block::default().borders(Borders::ALL).title("Run Menu");
-    let para = Paragraph::new(lines).block(block);
-    f.render_widget(para, popup);
 }
 
 fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
@@ -334,64 +237,45 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
     } else {
         ("DEC", Color::Cyan)
     };
-    let (region_text, region_color) = match app.mem_region {
-        MemRegion::Data => ("DATA", Color::Yellow),
-        MemRegion::Stack => ("STACK", Color::LightBlue),
-        MemRegion::Custom => ("ADDR", Color::Gray),
-    };
     let (run_text, run_color) = if app.is_running {
         ("RUN", Color::Green)
     } else {
         ("PAUSE", Color::Red)
     };
+
+    let button = |text: &str, color: Color| {
+        Span::styled(format!("[{text}]"), Style::default().fg(Color::Black).bg(color))
+    };
+
     let mut spans = vec![
-        Span::raw("View: "),
-        Span::styled(
-            view_text,
-            Style::default()
-                .fg(view_color)
-                .add_modifier(Modifier::UNDERLINED),
-        ),
-        Span::raw("  Format: "),
-        Span::styled(
-            fmt_text,
-            Style::default()
-                .fg(fmt_color)
-                .add_modifier(Modifier::UNDERLINED),
-        ),
+        Span::raw("View "),
+        button(view_text, view_color),
+        Span::raw("  Format "),
+        button(fmt_text, fmt_color),
     ];
+
     if !app.show_registers {
         let bytes_text = match app.mem_view_bytes {
             4 => "4B",
             2 => "2B",
             _ => "1B",
         };
-        spans.push(Span::raw("  Bytes: "));
-        spans.push(Span::styled(
-            bytes_text,
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::UNDERLINED),
-        ));
+        spans.push(Span::raw("  Bytes "));
+        spans.push(button(bytes_text, Color::Yellow));
+        let (region_text, region_color) = match app.mem_region {
+            MemRegion::Data => ("DATA", Color::Yellow),
+            MemRegion::Stack => ("STACK", Color::LightBlue),
+            MemRegion::Custom => ("ADDR", Color::Gray),
+        };
+        spans.push(Span::raw("  Region "));
+        spans.push(button(region_text, region_color));
     }
-    spans.push(Span::raw("  Region: "));
-    spans.push(Span::styled(
-        region_text,
-        Style::default()
-            .fg(region_color)
-            .add_modifier(Modifier::UNDERLINED),
-    ));
-    spans.push(Span::raw("  State: "));
-    spans.push(Span::styled(
-        run_text,
-        Style::default()
-            .fg(run_color)
-            .add_modifier(Modifier::UNDERLINED),
-    ));
+
+    spans.push(Span::raw("  State "));
+    spans.push(button(run_text, run_color));
+
     let line1 = Line::from(spans);
-    let line2 = Line::from(
-        "Commands: s=step  r=run  p=pause  d=data  k=stack  Up/Down/PgUp/PgDn scroll  m=menu",
-    );
+    let line2 = Line::from("Commands: s=step  r=run  p=pause  Up/Down/PgUp/PgDn scroll");
     let para = Paragraph::new(vec![line1, line2])
         .block(Block::default().borders(Borders::ALL).title("Run Controls"));
     f.render_widget(para, area);

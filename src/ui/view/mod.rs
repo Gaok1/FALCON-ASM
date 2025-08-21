@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     prelude::*,
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, Borders, Paragraph, Tabs, Clear},
 };
 
 pub(super) use super::app::{App, EditorMode, MemRegion, Tab};
@@ -82,4 +82,40 @@ pub fn ui(f: &mut Frame, app: &App) {
 
     let status = Paragraph::new(status).block(Block::default().borders(Borders::ALL));
     f.render_widget(status, chunks[2]);
+
+    if app.show_exit_popup {
+        render_exit_popup(f, size);
+    }
+}
+
+fn render_exit_popup(f: &mut Frame, area: Rect) {
+    let popup = centered_rect(area.width / 3, area.height / 4, area);
+    f.render_widget(Clear, popup);
+    let block = Block::default().borders(Borders::ALL).title("Confirm Exit");
+    let lines = vec![
+        Line::raw("Do you wish to exit?"),
+        Line::raw("Check your code is saved before exiting."),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("[Exit]", Style::default().fg(Color::Black).bg(Color::Red)),
+            Span::raw("   "),
+            Span::styled(
+                "[Cancel]",
+                Style::default().fg(Color::Black).bg(Color::Blue),
+            ),
+        ]),
+    ];
+    let para = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Center);
+    f.render_widget(para, popup);
+}
+
+fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {
+    Rect::new(
+        r.x + (r.width.saturating_sub(width)) / 2,
+        r.y + (r.height.saturating_sub(height)) / 2,
+        width,
+        height,
+    )
 }
