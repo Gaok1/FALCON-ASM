@@ -246,6 +246,8 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
         let mut style = Style::default().fg(Color::Black).bg(color);
         if hovered {
             style = style.add_modifier(Modifier::BOLD);
+        } else {
+            style = style.add_modifier(Modifier::DIM);
         }
         Span::styled(format!("[{text}]"), style)
     };

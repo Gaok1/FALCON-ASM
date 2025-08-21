@@ -120,9 +120,15 @@ pub(super) fn render_editor(f: &mut Frame, area: Rect, app: &App) {
         }
         let mut spans = Vec::new();
         spans.push(Span::styled(
-            format!("{:>width$} ", i + 1, width = num_width),
+            format!("{:>width$}", i + 1, width = num_width),
             Style::default().fg(Color::DarkGray),
         ));
+        let marker_style = if Some(i) == app.diag_line {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        spans.push(Span::styled(" │ ", marker_style));
         spans.extend(line.spans);
         rows.push(Line::from(spans));
     }
@@ -144,7 +150,7 @@ pub(super) fn render_editor(f: &mut Frame, area: Rect, app: &App) {
 
     let cur_row = app.editor.cursor_row as u16;
     let cur_col = app.editor.cursor_col as u16;
-    let gutter = (num_width + 1) as u16;
+    let gutter = (num_width + 3) as u16;
     let cursor_x = area.x + 1 + gutter + cur_col;
     let cursor_y = area.y + 1 + (cur_row - start as u16);
     if cursor_y < area.y + area.height && cursor_x < area.x + area.width {
