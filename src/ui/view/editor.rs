@@ -92,6 +92,7 @@ pub(super) fn render_editor(f: &mut Frame, area: Rect, app: &App) {
     }
     let end = min(len, start + visible_h);
 
+    let num_width = end.to_string().len();
     let mut rows: Vec<Line> = Vec::with_capacity(end - start);
     for i in start..end {
         let line_str = &app.editor.lines[i];
@@ -117,7 +118,13 @@ pub(super) fn render_editor(f: &mut Frame, area: Rect, app: &App) {
                     .add_modifier(Modifier::UNDERLINED),
             );
         }
-        rows.push(line);
+        let mut spans = Vec::new();
+        spans.push(Span::styled(
+            format!("{:>width$} ", i + 1, width = num_width),
+            Style::default().fg(Color::DarkGray),
+        ));
+        spans.extend(line.spans);
+        rows.push(Line::from(spans));
     }
     let mut block = Block::default()
         .borders(Borders::ALL)
@@ -137,7 +144,8 @@ pub(super) fn render_editor(f: &mut Frame, area: Rect, app: &App) {
 
     let cur_row = app.editor.cursor_row as u16;
     let cur_col = app.editor.cursor_col as u16;
-    let cursor_x = area.x + 1 + cur_col;
+    let gutter = (num_width + 1) as u16;
+    let cursor_x = area.x + 1 + gutter + cur_col;
     let cursor_y = area.y + 1 + (cur_row - start as u16);
     if cursor_y < area.y + area.height && cursor_x < area.x + area.width {
         f.set_cursor_position((cursor_x, cursor_y));
