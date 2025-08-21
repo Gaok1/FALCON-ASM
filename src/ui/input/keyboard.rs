@@ -2,6 +2,7 @@ use crate::ui::app::{App, EditorMode, MemRegion, Tab};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use rfd::FileDialog as OSFileDialog;
 use std::{io, time::Instant};
+use arboard::Clipboard;
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
     if key.kind != KeyEventKind::Press {
@@ -46,6 +47,27 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                 {
                     let _ = std::fs::write(path, app.editor.text());
                 }
+                return Ok(false);
+            }
+
+            if ctrl && matches!(key.code, KeyCode::Char('c')) && matches!(app.tab, Tab::Editor) {
+                if let Some(text) = app.editor.selected_text() {
+                    if let Ok(mut clip) = Clipboard::new() {
+                        let _ = clip.set_text(text);
+                    }
+                }
+                return Ok(false);
+            }
+
+            if ctrl && matches!(key.code, KeyCode::Char('z')) && matches!(app.tab, Tab::Editor) {
+                app.editor.undo();
+                app.editor_dirty = true;
+                app.last_edit_at = Some(Instant::now());
+                app.diag_line = None;
+                app.diag_msg = None;
+                app.diag_line_text = None;
+                app.last_compile_ok = None;
+                app.last_assemble_msg = None;
                 return Ok(false);
             }
 
@@ -156,6 +178,27 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
             // Global assemble
             if ctrl && matches!(key.code, KeyCode::Char('r')) {
                 app.assemble_and_load();
+                return Ok(false);
+            }
+
+            if ctrl && matches!(key.code, KeyCode::Char('c')) && matches!(app.tab, Tab::Editor) {
+                if let Some(text) = app.editor.selected_text() {
+                    if let Ok(mut clip) = Clipboard::new() {
+                        let _ = clip.set_text(text);
+                    }
+                }
+                return Ok(false);
+            }
+
+            if ctrl && matches!(key.code, KeyCode::Char('z')) && matches!(app.tab, Tab::Editor) {
+                app.editor.undo();
+                app.editor_dirty = true;
+                app.last_edit_at = Some(Instant::now());
+                app.diag_line = None;
+                app.diag_msg = None;
+                app.diag_line_text = None;
+                app.last_compile_ok = None;
+                app.last_assemble_msg = None;
                 return Ok(false);
             }
 
