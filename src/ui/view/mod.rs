@@ -1,10 +1,10 @@
 use ratatui::{
     Frame,
     prelude::*,
-    widgets::{Block, Borders, Paragraph, Tabs, Clear},
+    widgets::{Block, Borders, Clear, Paragraph, Tabs},
 };
 
-pub(super) use super::app::{App, EditorMode, MemRegion, Tab};
+pub(super) use super::app::{App, EditorMode, MemRegion, RunButton, Tab};
 pub(super) use super::editor::Editor;
 
 mod docs;
@@ -37,7 +37,7 @@ pub fn ui(f: &mut Frame, app: &App) {
                 _ => Tab::Docs,
             };
             if Some(tab) == app.hover_tab && tab != app.tab {
-                line = line.style(Style::default().bg(Color::DarkGray));
+                line = line.style(Style::default().fg(Color::Black).bg(Color::Gray));
             }
             line
         })

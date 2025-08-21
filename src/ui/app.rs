@@ -34,6 +34,15 @@ pub(super) enum MemRegion {
     Custom,
 }
 
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub(super) enum RunButton {
+    View,
+    Format,
+    Bytes,
+    Region,
+    State,
+}
+
 pub struct App {
     pub(super) tab: Tab,
     pub(super) mode: EditorMode,
@@ -78,6 +87,7 @@ pub struct App {
     pub(super) mouse_x: u16,
     pub(super) mouse_y: u16,
     pub(super) hover_tab: Option<Tab>,
+    pub(super) hover_run_button: Option<RunButton>,
 }
 
 impl App {
@@ -123,6 +133,7 @@ impl App {
             mouse_x: 0,
             mouse_y: 0,
             hover_tab: None,
+            hover_run_button: None,
         }
     }
 

@@ -3,7 +3,7 @@ use ratatui::Frame;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap};
 
-use super::{App, MemRegion};
+use super::{App, MemRegion, RunButton};
 
 pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
@@ -223,7 +223,6 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     let fmt = detect_format(cur_word);
     render_bit_fields(f, mid_chunks[1], cur_word, fmt);
     render_field_values(f, mid_chunks[2], cur_word, fmt);
-
 }
 
 fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
@@ -243,15 +242,27 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
         ("PAUSE", Color::Red)
     };
 
-    let button = |text: &str, color: Color| {
-        Span::styled(format!("[{text}]"), Style::default().fg(Color::Black).bg(color))
+    let button = |text: &str, color: Color, hovered: bool| {
+        let mut style = Style::default().fg(Color::Black).bg(color);
+        if hovered {
+            style = style.add_modifier(Modifier::BOLD);
+        }
+        Span::styled(format!("[{text}]"), style)
     };
 
     let mut spans = vec![
         Span::raw("View "),
-        button(view_text, view_color),
+        button(
+            view_text,
+            view_color,
+            app.hover_run_button == Some(RunButton::View),
+        ),
         Span::raw("  Format "),
-        button(fmt_text, fmt_color),
+        button(
+            fmt_text,
+            fmt_color,
+            app.hover_run_button == Some(RunButton::Format),
+        ),
     ];
 
     if !app.show_registers {
@@ -261,18 +272,30 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
             _ => "1B",
         };
         spans.push(Span::raw("  Bytes "));
-        spans.push(button(bytes_text, Color::Yellow));
+        spans.push(button(
+            bytes_text,
+            Color::Yellow,
+            app.hover_run_button == Some(RunButton::Bytes),
+        ));
         let (region_text, region_color) = match app.mem_region {
             MemRegion::Data => ("DATA", Color::Yellow),
             MemRegion::Stack => ("STACK", Color::LightBlue),
             MemRegion::Custom => ("ADDR", Color::Gray),
         };
         spans.push(Span::raw("  Region "));
-        spans.push(button(region_text, region_color));
+        spans.push(button(
+            region_text,
+            region_color,
+            app.hover_run_button == Some(RunButton::Region),
+        ));
     }
 
     spans.push(Span::raw("  State "));
-    spans.push(button(run_text, run_color));
+    spans.push(button(
+        run_text,
+        run_color,
+        app.hover_run_button == Some(RunButton::State),
+    ));
 
     let line1 = Line::from(spans);
     let line2 = Line::from("Commands: s=step  r=run  p=pause  Up/Down/PgUp/PgDn scroll");
