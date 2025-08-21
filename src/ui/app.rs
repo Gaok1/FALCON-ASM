@@ -159,16 +159,12 @@ impl App {
                 self.diag_line_text = None;
             }
             Err(e) => {
-                let (line, msg) = extract_line_info(&e);
-                self.diag_line = line;
-                self.diag_msg = Some(msg.clone());
-                self.diag_line_text = line.and_then(|l| self.editor.lines.get(l).cloned());
+                self.diag_line = Some(e.line);
+                self.diag_msg = Some(e.msg.clone());
+                self.diag_line_text = self.editor.lines.get(e.line).cloned();
                 self.last_compile_ok = Some(false);
-                self.last_assemble_msg = Some(format!(
-                    "Assemble error at line {}: {}",
-                    line.map(|n| n + 1).unwrap_or(0),
-                    msg
-                ));
+                self.last_assemble_msg =
+                    Some(format!("Assemble error at line {}: {}", e.line + 1, e.msg));
             }
         }
     }
@@ -189,10 +185,9 @@ impl App {
                 self.diag_line_text = None;
             }
             Err(e) => {
-                let (line, msg) = extract_line_info(&e);
-                self.diag_line = line;
-                self.diag_msg = Some(msg.clone());
-                self.diag_line_text = line.and_then(|l| self.editor.lines.get(l).cloned());
+                self.diag_line = Some(e.line);
+                self.diag_msg = Some(e.msg.clone());
+                self.diag_line_text = self.editor.lines.get(e.line).cloned();
                 self.last_compile_ok = Some(false);
             }
         }
@@ -269,28 +264,4 @@ pub fn run(terminal: &mut DefaultTerminal, mut app: App) -> io::Result<()> {
     }
     execute!(terminal.backend_mut(), DisableMouseCapture)?;
     Ok(())
-}
-fn extract_line_info(err: &str) -> (Option<usize>, String) {
-    // very lightweight: find first integer in the message and treat as 1-based line
-    let mut num: Option<usize> = None;
-    let mut cur = String::new();
-    for ch in err.chars() {
-        if ch.is_ascii_digit() {
-            cur.push(ch);
-        } else {
-            if !cur.is_empty() {
-                if let Ok(n) = cur.parse::<usize>() {
-                    num = Some(n.saturating_sub(1));
-                    break;
-                }
-                cur.clear();
-            }
-        }
-    }
-    if num.is_none() && !cur.is_empty() {
-        if let Ok(n) = cur.parse::<usize>() {
-            num = Some(n.saturating_sub(1));
-        }
-    }
-    (num, err.to_string())
 }

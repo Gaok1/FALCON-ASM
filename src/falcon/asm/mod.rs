@@ -3,6 +3,18 @@ use crate::falcon::encoder::encode;
 use crate::falcon::instruction::Instruction;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
+pub struct AsmError {
+    pub line: usize,
+    pub msg: String,
+}
+
+impl std::fmt::Display for AsmError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "line {}: {}", self.line + 1, self.msg)
+    }
+}
+
 // Structure returned with code and data
 pub struct Program {
     /// Assembled code (instructions) in little-endian format.
@@ -14,7 +26,7 @@ pub struct Program {
 }
 
 // ---------- API ----------
-pub fn assemble(text: &str, base_pc: u32) -> Result<Program, String> {
+pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
     let lines = preprocess(text);
     let data_base = base_pc + 0x1000; // data region after code
 
@@ -26,12 +38,12 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, String> {
     let mut section = Section::Text;
     let mut pc_text = base_pc;
     let mut pc_data = 0u32; // offset from data_base
-    let mut items: Vec<(u32, LineKind)> = Vec::new(); // (pc, LineKind)
+    let mut items: Vec<(u32, LineKind, usize)> = Vec::new(); // (pc, LineKind, line number)
     let mut data_bytes = Vec::<u8>::new();
     let mut labels = HashMap::<String, u32>::new();
 
     // Iterate over lines and collect labels and instructions
-    for raw in &lines {
+    for (line_no, raw) in &lines {
         if raw == ".text" {
             section = Section::Text;
             continue;
@@ -50,8 +62,9 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, String> {
             };
             labels.insert(lab.trim().to_string(), addr);
             line = rest[1..].trim();
-            if line.is_empty() { //instruction label,
-                continue;       
+            if line.is_empty() {
+                //instruction label,
+                continue;
             }
         }
 
@@ -59,34 +72,46 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, String> {
             Section::Text => {
                 let ltrim = line.trim_start();
                 if ltrim.starts_with("la ") {
-                    items.push((pc_text, LineKind::La(ltrim.to_string())));
+                    items.push((pc_text, LineKind::La(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(8);
                 } else if ltrim.starts_with("push ") {
-                    items.push((pc_text, LineKind::Push(ltrim.to_string())));
+                    items.push((pc_text, LineKind::Push(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(8);
                 } else if ltrim.starts_with("pop ") {
-                    items.push((pc_text, LineKind::Pop(ltrim.to_string())));
+                    items.push((pc_text, LineKind::Pop(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(8);
                 } else {
-                    items.push((pc_text, LineKind::Instr(ltrim.to_string())));
+                    items.push((pc_text, LineKind::Instr(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(4);
                 }
             }
             Section::Data => {
                 if let Some(rest) = line.strip_prefix(".byte") {
                     for b in rest.split(',') {
-                        let v = parse_imm(b).ok_or_else(|| format!("invalid .byte: {b}"))?;
+                        let v = parse_imm(b).ok_or_else(|| AsmError {
+                            line: *line_no,
+                            msg: format!("invalid .byte: {b}"),
+                        })?;
                         if !(0..=255).contains(&v) {
-                            return Err(format!(".byte outside 0..255: {v}"));
+                            return Err(AsmError {
+                                line: *line_no,
+                                msg: format!(".byte outside 0..255: {v}"),
+                            });
                         }
                         data_bytes.push(v as u8);
                         pc_data += 1;
                     }
                 } else if let Some(rest) = line.strip_prefix(".half") {
                     for h in rest.split(',') {
-                        let v = parse_imm(h).ok_or_else(|| format!("invalid .half: {h}"))?;
+                        let v = parse_imm(h).ok_or_else(|| AsmError {
+                            line: *line_no,
+                            msg: format!("invalid .half: {h}"),
+                        })?;
                         if !(0..=65535).contains(&v) {
-                            return Err(format!(".half outside 0..65535: {v}"));
+                            return Err(AsmError {
+                                line: *line_no,
+                                msg: format!(".half outside 0..65535: {v}"),
+                            });
                         }
                         let bytes = (v as u16).to_le_bytes();
                         data_bytes.extend_from_slice(&bytes);
@@ -94,14 +119,19 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, String> {
                     }
                 } else if let Some(rest) = line.strip_prefix(".word") {
                     for w in rest.split(',') {
-
-                        let v = parse_imm(w).ok_or_else(|| format!("invalid .word: {w}"))?;
+                        let v = parse_imm(w).ok_or_else(|| AsmError {
+                            line: *line_no,
+                            msg: format!("invalid .word: {w}"),
+                        })?;
                         let bytes = (v as u32).to_le_bytes();
                         data_bytes.extend_from_slice(&bytes);
                         pc_data += 4;
                     }
                 } else {
-                    return Err(format!("unknown data directive: {line}"));
+                    return Err(AsmError {
+                        line: *line_no,
+                        msg: format!("unknown data directive: {line}"),
+                    });
                 }
             }
         }
@@ -109,31 +139,64 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, String> {
 
     // 2nd pass: assemble
     let mut words = Vec::with_capacity(items.len());
-    for (pc, kind) in items {
+    for (pc, kind, line_no) in items {
         match kind {
             LineKind::Instr(s) => {
-                let inst = parse_instr(&s, pc, &labels)?;
-                let word = encode(inst).map_err(|e| e.to_string())?;
+                let inst = parse_instr(&s, pc, &labels).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e,
+                })?;
+                let word = encode(inst).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
                 words.push(word);
             }
             LineKind::La(s) => {
-                let (i1, i2) = parse_la(&s, &labels)?;
-                let w1 = encode(i1).map_err(|e| e.to_string())?;
-                let w2 = encode(i2).map_err(|e| e.to_string())?;
+                let (i1, i2) = parse_la(&s, &labels).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e,
+                })?;
+                let w1 = encode(i1).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
+                let w2 = encode(i2).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
                 words.push(w1);
                 words.push(w2);
             }
             LineKind::Push(s) => {
-                let (i1, i2) = parse_push(&s)?;
-                let w1 = encode(i1).map_err(|e| e.to_string())?;
-                let w2 = encode(i2).map_err(|e| e.to_string())?;
+                let (i1, i2) = parse_push(&s).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e,
+                })?;
+                let w1 = encode(i1).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
+                let w2 = encode(i2).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
                 words.push(w1);
                 words.push(w2);
             }
             LineKind::Pop(s) => {
-                let (i1, i2) = parse_pop(&s)?;
-                let w1 = encode(i1).map_err(|e| e.to_string())?;
-                let w2 = encode(i2).map_err(|e| e.to_string())?;
+                let (i1, i2) = parse_pop(&s).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e,
+                })?;
+                let w1 = encode(i1).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
+                let w2 = encode(i2).map_err(|e| AsmError {
+                    line: line_no,
+                    msg: e.to_string(),
+                })?;
                 words.push(w1);
                 words.push(w2);
             }
@@ -156,14 +219,15 @@ enum LineKind {
     Pop(String),
 }
 
-fn preprocess(text: &str) -> Vec<String> {
+fn preprocess(text: &str) -> Vec<(usize, String)> {
     text.lines()
-        .map(|l| {
+        .enumerate()
+        .map(|(i, l)| {
             let l = l.split(';').next().unwrap_or(l);
             let l = l.split('#').next().unwrap_or(l);
-            l.trim().to_string()
+            (i, l.trim().to_string())
         })
-        .filter(|l| !l.is_empty())
+        .filter(|(_, l)| !l.is_empty())
         .collect()
 }
 
@@ -676,10 +740,14 @@ mod tests {
             rs2: 10,
             rs1: 2,
             imm: 4,
-        }).expect("encode sw");
-        println!("Expected SW: {}, Expected ADDI: {}", expected_sw, expected_addi);
+        })
+        .expect("encode sw");
+        println!(
+            "Expected SW: {}, Expected ADDI: {}",
+            expected_sw, expected_addi
+        );
         assert_eq!(prog.text[0], expected_addi);
-        assert_eq!(prog.text[1], expected_sw); 
+        assert_eq!(prog.text[1], expected_sw);
     }
 
     #[test]
