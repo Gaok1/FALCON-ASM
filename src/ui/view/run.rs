@@ -46,7 +46,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Length(38),
-            Constraint::Length(38),
+            Constraint::Length(app.imem_width),
             Constraint::Min(46),
         ])
         .split(main);
@@ -161,9 +161,15 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     }
 
     // --- Middle column: instruction memory around PC ---
+    let border_style = if app.hover_imem_bar {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
     let imem_block = Block::default()
         .borders(Borders::ALL)
-        .title("Instruction Memory");
+        .title("Instruction Memory")
+        .border_style(border_style);
     f.render_widget(imem_block.clone(), cols[1]);
     let inner = imem_block.inner(cols[1]);
     let mut items = Vec::new();
@@ -189,6 +195,18 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     }
     let list = List::new(items);
     f.render_widget(list, inner);
+
+    // Arrow indicator on right border
+    let arrow_style = if app.hover_imem_bar {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let arrow_x = cols[1].x + cols[1].width - 1;
+    let arrow_y = cols[1].y + cols[1].height / 2;
+    let arrow_area = Rect::new(arrow_x, arrow_y, 1, 1);
+    let arrow = Paragraph::new("▶").style(arrow_style);
+    f.render_widget(arrow, arrow_area);
 
     // --- Right column: current instruction details ---
     let mid_chunks = Layout::default()

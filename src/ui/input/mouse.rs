@@ -157,8 +157,21 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
     // Run tab interactions
     if let Tab::Run = app.tab {
         update_run_status_hover(app, me, area);
-        if matches!(me.kind, MouseEventKind::Down(MouseButton::Left)) {
-            handle_run_status_click(app, me, area);
+        update_imem_hover(app, me, area);
+        match me.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                handle_run_status_click(app, me, area);
+                start_imem_drag(app, me, area);
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if app.imem_drag {
+                    handle_imem_drag(app, me, area);
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                app.imem_drag = false;
+            }
+            _ => {}
         }
     }
 }
@@ -296,6 +309,72 @@ fn run_status_hit(app: &App, status: Rect, col: u16) -> Option<RunButton> {
     } else {
         None
     }
+}
+
+fn run_cols(app: &App, area: Rect) -> Vec<Rect> {
+    let root_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ])
+        .split(area);
+    let main = root_chunks[2];
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(38),
+            Constraint::Length(app.imem_width),
+            Constraint::Min(46),
+        ])
+        .split(main)
+        .to_vec()
+}
+
+fn update_imem_hover(app: &mut App, me: MouseEvent, area: Rect) {
+    let cols = run_cols(app, area);
+    let imem = cols[1];
+    let bar_x = imem.x + imem.width - 1;
+    if me.column == bar_x && me.row >= imem.y && me.row < imem.y + imem.height {
+        app.hover_imem_bar = true;
+    } else if !app.imem_drag {
+        app.hover_imem_bar = false;
+    }
+}
+
+fn start_imem_drag(app: &mut App, me: MouseEvent, area: Rect) {
+    let cols = run_cols(app, area);
+    let imem = cols[1];
+    let bar_x = imem.x + imem.width - 1;
+    if me.column == bar_x && me.row >= imem.y && me.row < imem.y + imem.height {
+        app.imem_drag = true;
+        app.imem_drag_start_x = me.column;
+        app.imem_width_start = app.imem_width;
+    }
+}
+
+fn handle_imem_drag(app: &mut App, me: MouseEvent, area: Rect) {
+    let delta = me.column as i32 - app.imem_drag_start_x as i32;
+    let root_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+        ])
+        .split(area);
+    let main = root_chunks[2];
+    let available = main.width.saturating_sub(38 + 46);
+    let max = if available < 20 { 20 } else { available } as i32;
+    let mut new_width = app.imem_width_start as i32 + delta;
+    if new_width < 20 {
+        new_width = 20;
+    }
+    if new_width > max {
+        new_width = max;
+    }
+    app.imem_width = new_width as u16;
 }
 
 fn handle_exit_popup_mouse(app: &mut App, me: MouseEvent, area: Rect) {

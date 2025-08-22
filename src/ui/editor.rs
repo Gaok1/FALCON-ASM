@@ -226,6 +226,43 @@ impl Editor {
         }
     }
 
+    pub fn shift_tab(&mut self) {
+        self.snapshot();
+        if let Some(((sr, _), (er, _))) = self.selection_range() {
+            for row in sr..=er {
+                if row < self.lines.len() {
+                    let removed = self.lines[row]
+                        .chars()
+                        .take(4)
+                        .take_while(|c| *c == ' ')
+                        .count();
+                    let byte = Self::byte_at(&self.lines[row], removed);
+                    self.lines[row].replace_range(0..byte, "");
+                    if let Some((ar, ac)) = self.selection_anchor {
+                        if ar == row {
+                            self.selection_anchor = Some((ar, ac.saturating_sub(removed)));
+                        }
+                    }
+                    if self.cursor_row == row {
+                        self.cursor_col = self.cursor_col.saturating_sub(removed);
+                    }
+                }
+            }
+        } else {
+            let removed = self
+                .current_line()
+                .chars()
+                .take(4)
+                .take_while(|c| *c == ' ')
+                .count();
+            if removed > 0 {
+                let byte = Self::byte_at(self.current_line(), removed);
+                self.current_line_mut().replace_range(0..byte, "");
+                self.cursor_col = self.cursor_col.saturating_sub(removed);
+            }
+        }
+    }
+
     pub fn backspace(&mut self) {
         self.snapshot();
         if let Some((start, end)) = self.selection_range() {
