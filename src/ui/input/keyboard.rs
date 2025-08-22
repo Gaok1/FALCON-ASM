@@ -1,8 +1,8 @@
 use crate::ui::app::{App, EditorMode, MemRegion, Tab};
+use arboard::Clipboard;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use rfd::FileDialog as OSFileDialog;
 use std::{io, time::Instant};
-use arboard::Clipboard;
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
     if key.kind != KeyEventKind::Press {
@@ -153,6 +153,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                     KeyCode::Backspace => app.editor.backspace(),
                     KeyCode::Delete => app.editor.delete_char(),
                     KeyCode::Enter => app.editor.enter(),
+                    KeyCode::BackTab => app.editor.shift_tab(),
                     KeyCode::Tab => app.editor.tab(),
                     KeyCode::Char(c) => app.editor.insert_char(c), // includes '1'/'2'
                     _ => {}
