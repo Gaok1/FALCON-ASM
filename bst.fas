@@ -7,16 +7,27 @@ tree: .word 0,0,20
 
 main:
 
+li a0,20
+call alocate_tree_node
+
 # starts tree
 
 mv a1,s0
 li a0,15
 call insert_tree
-
 li a0,23
 call insert_tree
-
 li a0,1
+call insert_tree
+li a0, 2
+call insert_tree
+li a0,3
+call insert_tree
+li a0,90
+call insert_tree
+li a0,23
+call insert_tree
+li a0,21
 call insert_tree
 
 call end
@@ -26,7 +37,7 @@ call end
 #a1 endereço do nodo
 #s0  new address of the node
 insert_tree:
-    blt zero,a1, return_node # no more nodes, create one and returns
+    blt a1,zero,  return_node # no more nodes, create one and returns
 
     push ra
     push a1
@@ -34,23 +45,22 @@ insert_tree:
     lw t0, 0(a1)   # node
     blt t0, a0,insert_right #node.val < element
     #insert_left:
-        lw a1,-4(a1) #load left son address
+        lw a1,4(a1) #load left son address
         call insert_tree
         pop a1
-        sw s0, -4(a1)
+        sw s0,4(a1)
         pop ra
         mv s0,a1
         ret
     insert_right:
-        lw a1, -8(a1)
+        lw a1, 8(a1)
         call insert_tree
         pop a1
-        sw s0,-8(a1)
+        sw s0,8(a1)
         pop ra
         mv s0,a1
         ret
     return_node: #criação do node
-        mv a0,a1
         push ra
         call alocate_tree_node
         pop ra
@@ -66,16 +76,18 @@ alocate_tree_node:
     la t0,tree
     li t4, 12
     mul t2,t1,t4 #offset of new block
+    add t0,t0,t2    
 
-    sw a0, 0(t2)
+    sw a0, 0(t0)
     li t6, -1
-    sw t6, 4(t2)
-    sw t6, 8(t2)
+    sw t6, 4(t0)
+    sw t6, 8(t0)
+    mv s0,t0
 
     addi t1, t1,1
     la t0,len
     sw t1, 0(t0)
-    mv s0,t6
+
     ret
 
 end:
