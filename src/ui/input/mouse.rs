@@ -195,6 +195,9 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
             RunButton::Format => {
                 app.show_hex = !app.show_hex;
             }
+            RunButton::Sign => {
+                app.show_signed = !app.show_signed;
+            }
             RunButton::Bytes => {
                 app.mem_view_bytes = match app.mem_view_bytes {
                     4 => 2,
@@ -257,6 +260,7 @@ fn run_status_area(area: Rect) -> Rect {
 fn run_status_hit(app: &App, status: Rect, col: u16) -> Option<RunButton> {
     let view_text = if app.show_registers { "REGS" } else { "RAM" };
     let fmt_text = if app.show_hex { "HEX" } else { "DEC" };
+    let sign_text = if app.show_signed { "SGN" } else { "UNS" };
     let bytes_text = match app.mem_view_bytes {
         4 => "4B",
         2 => "2B",
@@ -282,19 +286,22 @@ fn run_status_hit(app: &App, status: Rect, col: u16) -> Option<RunButton> {
     skip(&mut pos, "View ");
     let (view_start, view_end) = range(&mut pos, view_text);
 
-    skip(&mut pos, "  Format ");
-    let (fmt_start, fmt_end) = range(&mut pos, fmt_text);
-
-    let (bytes_start, bytes_end) = if !app.show_registers {
-        skip(&mut pos, "  Bytes ");
-        range(&mut pos, bytes_text)
+    let (region_start, region_end) = if !app.show_registers {
+        skip(&mut pos, "  Region ");
+        range(&mut pos, region_text)
     } else {
         (0, 0)
     };
 
-    let (region_start, region_end) = if !app.show_registers {
-        skip(&mut pos, "  Region ");
-        range(&mut pos, region_text)
+    skip(&mut pos, "  Format ");
+    let (fmt_start, fmt_end) = range(&mut pos, fmt_text);
+
+    skip(&mut pos, "  Sign ");
+    let (sign_start, sign_end) = range(&mut pos, sign_text);
+
+    let (bytes_start, bytes_end) = if !app.show_registers {
+        skip(&mut pos, "  Bytes ");
+        range(&mut pos, bytes_text)
     } else {
         (0, 0)
     };
@@ -304,12 +311,14 @@ fn run_status_hit(app: &App, status: Rect, col: u16) -> Option<RunButton> {
 
     if col >= view_start && col < view_end {
         Some(RunButton::View)
-    } else if col >= fmt_start && col < fmt_end {
-        Some(RunButton::Format)
-    } else if !app.show_registers && col >= bytes_start && col < bytes_end {
-        Some(RunButton::Bytes)
     } else if !app.show_registers && col >= region_start && col < region_end {
         Some(RunButton::Region)
+    } else if col >= fmt_start && col < fmt_end {
+        Some(RunButton::Format)
+    } else if col >= sign_start && col < sign_end {
+        Some(RunButton::Sign)
+    } else if !app.show_registers && col >= bytes_start && col < bytes_end {
+        Some(RunButton::Bytes)
     } else if col >= state_start && col < state_end {
         Some(RunButton::State)
     } else {

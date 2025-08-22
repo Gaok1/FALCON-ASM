@@ -74,6 +74,8 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                 };
                 let val_str = if app.show_hex {
                     format!("0x{val:08x}")
+                } else if app.show_signed {
+                    format!("{}", val as i32)
                 } else {
                     format!("{val}")
                 };
@@ -93,6 +95,8 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                 };
                 let val_str = if app.show_hex {
                     format!("0x{val:08x}")
+                } else if app.show_signed {
+                    format!("{}", val as i32)
                 } else {
                     format!("{val}")
                 };
@@ -125,6 +129,8 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                         let w = app.mem.load32(addr);
                         if app.show_hex {
                             format!("0x{w:08x}")
+                        } else if app.show_signed {
+                            format!("{}", w as i32)
                         } else {
                             format!("{w}")
                         }
@@ -133,6 +139,8 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                         let w = app.mem.load16(addr);
                         if app.show_hex {
                             format!("0x{w:04x}")
+                        } else if app.show_signed {
+                            format!("{}", (w as i16))
                         } else {
                             format!("{w}")
                         }
@@ -141,6 +149,8 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                         let w = app.mem.load8(addr);
                         if app.show_hex {
                             format!("0x{w:02x}")
+                        } else if app.show_signed {
+                            format!("{}", (w as i8))
                         } else {
                             format!("{w}")
                         }
@@ -182,6 +192,8 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
             let marker = if addr == app.cpu.pc { "▶" } else { " " };
             let val_str = if app.show_hex {
                 format!("0x{w:08x}")
+            } else if app.show_signed {
+                format!("{}", w as i32)
             } else {
                 format!("{w}")
             };
@@ -254,6 +266,11 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
     } else {
         ("DEC", Color::Cyan)
     };
+    let (sign_text, sign_color) = if app.show_signed {
+        ("SGN", Color::LightGreen)
+    } else {
+        ("UNS", Color::LightBlue)
+    };
     let (run_text, run_color) = if app.is_running {
         ("RUN", Color::Green)
     } else {
@@ -278,13 +295,35 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
             view_color,
             app.hover_run_button == Some(RunButton::View),
         ),
-        Span::raw("  Format "),
-        button(
-            fmt_text,
-            fmt_color,
-            app.hover_run_button == Some(RunButton::Format),
-        ),
     ];
+
+    if !app.show_registers {
+        let (region_text, region_color) = match app.mem_region {
+            MemRegion::Data => ("DATA", Color::Yellow),
+            MemRegion::Stack => ("STACK", Color::LightBlue),
+            MemRegion::Custom => ("ADDR", Color::Gray),
+        };
+        spans.push(Span::raw("  Region "));
+        spans.push(button(
+            region_text,
+            region_color,
+            app.hover_run_button == Some(RunButton::Region),
+        ));
+    }
+
+    spans.push(Span::raw("  Format "));
+    spans.push(button(
+        fmt_text,
+        fmt_color,
+        app.hover_run_button == Some(RunButton::Format),
+    ));
+
+    spans.push(Span::raw("  Sign "));
+    spans.push(button(
+        sign_text,
+        sign_color,
+        app.hover_run_button == Some(RunButton::Sign),
+    ));
 
     if !app.show_registers {
         let bytes_text = match app.mem_view_bytes {
@@ -297,17 +336,6 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
             bytes_text,
             Color::Yellow,
             app.hover_run_button == Some(RunButton::Bytes),
-        ));
-        let (region_text, region_color) = match app.mem_region {
-            MemRegion::Data => ("DATA", Color::Yellow),
-            MemRegion::Stack => ("STACK", Color::LightBlue),
-            MemRegion::Custom => ("ADDR", Color::Gray),
-        };
-        spans.push(Span::raw("  Region "));
-        spans.push(button(
-            region_text,
-            region_color,
-            app.hover_run_button == Some(RunButton::Region),
         ));
     }
 

@@ -38,6 +38,7 @@ pub(super) enum MemRegion {
 pub(super) enum RunButton {
     View,
     Format,
+    Sign,
     Bytes,
     Region,
     State,
@@ -72,6 +73,7 @@ pub struct App {
     pub(super) mem_region: MemRegion,
     pub(super) show_registers: bool,
     pub(super) show_hex: bool,
+    pub(super) show_signed: bool,
     pub(super) imem_width: u16,
     pub(super) hover_imem_bar: bool,
     pub(super) imem_drag: bool,
@@ -127,6 +129,7 @@ impl App {
             mem_region: MemRegion::Data,
             show_registers: true,
             show_hex: true,
+            show_signed: false,
             imem_width: 38,
             hover_imem_bar: false,
             imem_drag: false,
