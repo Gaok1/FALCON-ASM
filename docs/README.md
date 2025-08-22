@@ -36,7 +36,12 @@ The assembler accepts code split into segments:
 Inside `.data` the following directives are supported:
 
 - `.byte v1, v2, ...` – 8-bit values
+- `.half h1, h2, ...` – 16-bit values
 - `.word w1, w2, ...` – 32-bit values in little-endian
+- `.dword d1, d2, ...` – 64-bit values in little-endian
+- `.ascii "text"` – raw bytes
+- `.asciz "text"` / `.string "text"` – string with NUL terminator
+- `.space n` / `.zero n` – n zero bytes
 
 Labels (`label:`) can be defined in any segment. To load a label address, use the `la rd, label` pseudo-instruction, which emits a `lui`/`addi` pair.
 

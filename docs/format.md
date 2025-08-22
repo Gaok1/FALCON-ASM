@@ -182,7 +182,12 @@ Other formats (I, S, B, U, J) rearrange fields and immediates.
   - `.data` starts the data section (allocated from `base_pc + 0x1000`).
   - Inside `.data`:
     - `.byte` inserts 8-bit values.
+    - `.half` inserts 16-bit values.
     - `.word` inserts 32-bit words.
+    - `.dword` inserts 64-bit words.
+    - `.ascii "text"` emits raw bytes.
+    - `.asciz "text"` / `.string "text"` emit strings with a trailing zero.
+    - `.space n` / `.zero n` reserve `n` zero bytes.
 - **Loads/Stores**: syntax `imm(rs1)`.
 - **Branches/Jumps**: operand may be immediate or label. Offsets are byte-based; `B`/`J` require multiples of 2.
 - **Pseudo-instructions**:

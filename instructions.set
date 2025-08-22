@@ -35,8 +35,8 @@ docs/
 
 ## Assembler
 
-- `.text` and `.data` segments (data starts at `base_pc + 0x1000`).
-- `.byte` and `.word` directives to insert values in the data section.
+ - `.text` and `.data` segments (data starts at `base_pc + 0x1000`).
+ - `.byte`, `.half`, `.word`, `.dword` for numeric data; `.ascii`, `.asciz`/`.string` for strings; `.space`/`.zero` for padding in the data section.
 - Labels in any segment; `la rd, label` emits `lui` + `addi`.
 - Other pseudo-instructions: `nop`, `mv`, `li`, `subi`, `j`, `call`, `jr`, `ret`.
 
