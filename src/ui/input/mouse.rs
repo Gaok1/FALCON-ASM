@@ -109,6 +109,12 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
             s
         };
 
+        let visible_h = editor_area.height.saturating_sub(2) as usize;
+        let len = app.editor.lines.len();
+        let end = (start + visible_h).min(len);
+        let num_width = end.to_string().len() as u16;
+        let gutter = num_width + 3;
+
         let within = |x: u16, y: u16| {
             x >= editor_area.x + 1
                 && x < editor_area.x + editor_area.width - 1
@@ -121,7 +127,7 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
                 if within(me.column, me.row) {
                     let y = (me.row - (editor_area.y + 1)) as usize;
                     let row = (start + y).min(app.editor.lines.len().saturating_sub(1));
-                    let x = me.column.saturating_sub(editor_area.x + 1) as usize;
+                    let x = me.column.saturating_sub(editor_area.x + 1 + gutter) as usize;
                     let col = x.min(Editor::char_count(&app.editor.lines[row]));
                     app.editor.cursor_row = row;
                     app.editor.cursor_col = col;
@@ -137,7 +143,7 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
                 if within(me.column, me.row) {
                     let y = (me.row - (editor_area.y + 1)) as usize;
                     let row = (start + y).min(app.editor.lines.len().saturating_sub(1));
-                    let x = me.column.saturating_sub(editor_area.x + 1) as usize;
+                    let x = me.column.saturating_sub(editor_area.x + 1 + gutter) as usize;
                     let col = x.min(Editor::char_count(&app.editor.lines[row]));
                     app.editor.cursor_row = row;
                     app.editor.cursor_col = col;

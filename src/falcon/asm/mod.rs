@@ -127,6 +127,51 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
                         data_bytes.extend_from_slice(&bytes);
                         pc_data += 4;
                     }
+                } else if let Some(rest) = line.strip_prefix(".dword") {
+                    for d in rest.split(',') {
+                        let v = parse_imm64(d).ok_or_else(|| AsmError {
+                            line: *line_no,
+                            msg: format!("invalid .dword: {d}"),
+                        })?;
+                        let bytes = (v as i64 as u64).to_le_bytes();
+                        data_bytes.extend_from_slice(&bytes);
+                        pc_data += 8;
+                    }
+                } else if let Some(rest) = line.strip_prefix(".ascii") {
+                    let s = parse_str_lit(rest).ok_or_else(|| AsmError {
+                        line: *line_no,
+                        msg: format!("invalid .ascii: {rest}"),
+                    })?;
+                    data_bytes.extend_from_slice(s.as_bytes());
+                    pc_data += s.len() as u32;
+                } else if let Some(rest) = line
+                    .strip_prefix(".asciz")
+                    .or_else(|| line.strip_prefix(".string"))
+                {
+                    let s = parse_str_lit(rest).ok_or_else(|| AsmError {
+                        line: *line_no,
+                        msg: format!("invalid string: {rest}"),
+                    })?;
+                    data_bytes.extend_from_slice(s.as_bytes());
+                    data_bytes.push(0);
+                    pc_data += (s.len() + 1) as u32;
+                } else if let Some(rest) = line
+                    .strip_prefix(".space")
+                    .or_else(|| line.strip_prefix(".zero"))
+                {
+                    let n = parse_imm(rest).ok_or_else(|| AsmError {
+                        line: *line_no,
+                        msg: format!("invalid size: {rest}"),
+                    })?;
+                    if n < 0 {
+                        return Err(AsmError {
+                            line: *line_no,
+                            msg: format!("size must be positive: {n}"),
+                        });
+                    }
+                    let n = n as usize;
+                    data_bytes.extend(std::iter::repeat(0).take(n));
+                    pc_data += n as u32;
                 } else {
                     return Err(AsmError {
                         line: *line_no,
@@ -631,6 +676,24 @@ fn parse_imm(s: &str) -> Option<i32> {
         i32::from_str_radix(hex, 16).ok()
     } else {
         s.parse::<i32>().ok()
+    }
+}
+
+fn parse_imm64(s: &str) -> Option<i64> {
+    let s = s.trim();
+    if let Some(hex) = s.strip_prefix("0x") {
+        i64::from_str_radix(hex, 16).ok()
+    } else {
+        s.parse::<i64>().ok()
+    }
+}
+
+fn parse_str_lit(s: &str) -> Option<String> {
+    let s = s.trim();
+    if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
+        Some(s[1..s.len() - 1].to_string())
+    } else {
+        None
     }
 }
 
