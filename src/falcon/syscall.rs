@@ -46,6 +46,8 @@ pub fn handle_syscall<B: Bus>(
                     addr = addr.wrapping_add(1);
                 }
                 mem.store8(addr, 0); // NUL
+                                     // Input has been consumed; stop requesting console input
+                console.reading = false;
                 true
             } else {
                 console.reading = true;
@@ -58,4 +60,3 @@ pub fn handle_syscall<B: Bus>(
         }
     }
 }
-
