@@ -37,21 +37,25 @@ pub fn handle_syscall<B: Bus>(
             }
             true
         }
-        // 3: ler inteiro de stdin e gravar em a0
+        // 3: ler string de stdin e gravar na memória apontada por a0
         3 => {
+            let mut addr = cpu.read(10);
             if let Some(line) = console.read_line() {
-                if let Ok(v) = line.trim().parse::<u32>() {
-                    cpu.write(10, v);
-                } else {
-                    cpu.write(10, 0);
+                for b in line.as_bytes() {
+                    mem.store8(addr, *b);
+                    addr = addr.wrapping_add(1);
                 }
+                mem.store8(addr, 0); // NUL
                 true
             } else {
                 console.reading = true;
                 false
             }
         }
-        _ => false,
+        _ => {
+            console.push_error(format!("Unknown syscall code {code}"));
+            false
+        }
     }
 }
 
