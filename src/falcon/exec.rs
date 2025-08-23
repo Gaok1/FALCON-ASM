@@ -1,6 +1,8 @@
 // falcon/exec.rs
 use crate::falcon::{instruction::Instruction, memory::Bus, registers::Cpu};
 
+use crate::falcon::syscall::handle_syscall;
+
 pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B) -> bool {
     let pc = cpu.pc;
     let word = mem.load32(pc);
@@ -168,7 +170,13 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B) -> bool {
         Instruction::Lui { rd, imm } => cpu.write(rd, imm as u32),
         Instruction::Auipc { rd, imm } => cpu.write(rd, pc.wrapping_add(imm as u32)),
 
-        Instruction::Ecall | Instruction::Ebreak => return false, // HALT
+        Instruction::Ecall => {
+            let code = cpu.read(17);
+            if !handle_syscall(code, cpu, mem) {
+                return false;
+            }
+        }
+        Instruction::Ebreak => return false, // HALT
         _ => {}
     }
     true
@@ -191,16 +199,7 @@ pub fn run<B: crate::falcon::memory::Bus>(
 mod tests {
     use super::*;
     use crate::falcon::encoder;
-    use crate::falcon::{Ram, instruction::Instruction};
-
-    #[test]
-    fn ecall_halts() {
-        let mut cpu = Cpu::default();
-        let mut mem = Ram::new(4);
-        let inst = encoder::encode(Instruction::Ecall).unwrap();
-        mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem));
-    }
+    use crate::falcon::{instruction::Instruction, Ram};
 
     #[test]
     fn ebreak_halts() {
@@ -223,11 +222,52 @@ mod tests {
             imm: 0,
         })
         .unwrap();
-        let ecall = encoder::encode(Instruction::Ecall).unwrap();
+        let ebreak = encoder::encode(Instruction::Ebreak).unwrap();
         mem.store32(0, sw);
-        mem.store32(4, ecall);
+        mem.store32(4, ebreak);
         assert!(step(&mut cpu, &mut mem));
         assert_eq!(mem.load32(0x20), 0xDEADBEEF);
         assert!(!step(&mut cpu, &mut mem));
+    }
+
+    #[test]
+    fn syscall_print_int() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(4);
+        cpu.write(10, 42);
+        cpu.write(17, 1);
+        let inst = encoder::encode(Instruction::Ecall).unwrap();
+        mem.store32(0, inst);
+        assert!(step(&mut cpu, &mut mem));
+        assert_eq!(cpu.stdout, b"42");
+    }
+
+    #[test]
+    fn syscall_print_string() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(64);
+        let addr = 8u32;
+        let msg = b"hi\0";
+        for (i, b) in msg.iter().enumerate() {
+            mem.store8(addr + i as u32, *b);
+        }
+        cpu.write(10, addr);
+        cpu.write(17, 2);
+        let inst = encoder::encode(Instruction::Ecall).unwrap();
+        mem.store32(0, inst);
+        assert!(step(&mut cpu, &mut mem));
+        assert_eq!(cpu.stdout, b"hi");
+    }
+
+    #[test]
+    fn syscall_read_int() {
+        let mut cpu = Cpu::default();
+        cpu.stdin = b"123".to_vec();
+        let mut mem = Ram::new(4);
+        cpu.write(17, 3);
+        let inst = encoder::encode(Instruction::Ecall).unwrap();
+        mem.store32(0, inst);
+        assert!(step(&mut cpu, &mut mem));
+        assert_eq!(cpu.read(10), 123);
     }
 }
