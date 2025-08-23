@@ -4,6 +4,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap};
 
 use super::{App, MemRegion, RunButton};
+use crate::ui::app::FormatMode;
 
 pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
@@ -73,12 +74,16 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                 } else {
                     Style::default()
                 };
-                let val_str = if app.show_hex {
-                    format!("0x{val:08x}")
-                } else if app.show_signed {
-                    format!("{}", val as i32)
-                } else {
-                    format!("{val}")
+                let val_str = match app.fmt_mode {
+                    FormatMode::Hex => format!("0x{val:08x}"),
+                    FormatMode::Dec => {
+                        if app.show_signed {
+                            format!("{}", val as i32)
+                        } else {
+                            format!("{val}")
+                        }
+                    }
+                    FormatMode::Str => ascii_bytes(&val.to_le_bytes()),
                 };
                 rows.push(Row::new(vec![
                     Cell::from("PC").style(style),
@@ -94,12 +99,16 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                 } else {
                     Style::default()
                 };
-                let val_str = if app.show_hex {
-                    format!("0x{val:08x}")
-                } else if app.show_signed {
-                    format!("{}", val as i32)
-                } else {
-                    format!("{val}")
+                let val_str = match app.fmt_mode {
+                    FormatMode::Hex => format!("0x{val:08x}"),
+                    FormatMode::Dec => {
+                        if app.show_signed {
+                            format!("{}", val as i32)
+                        } else {
+                            format!("{val}")
+                        }
+                    }
+                    FormatMode::Str => ascii_bytes(&val.to_le_bytes()),
                 };
                 rows.push(Row::new(vec![
                     Cell::from(format!("x{reg_index:02} ({name})")).style(style),
@@ -125,36 +134,54 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
             let addr = base.wrapping_add(off);
             let max = app.mem_size.saturating_sub(bytes as usize) as u32;
             if addr <= max {
-                let val_str = match bytes {
-                    4 => {
+                let val_str = match (bytes, app.fmt_mode) {
+                    (4, FormatMode::Hex) => {
                         let w = app.mem.load32(addr);
-                        if app.show_hex {
-                            format!("0x{w:08x}")
-                        } else if app.show_signed {
+                        format!("0x{w:08x}")
+                    }
+                    (4, FormatMode::Dec) => {
+                        let w = app.mem.load32(addr);
+                        if app.show_signed {
                             format!("{}", w as i32)
                         } else {
                             format!("{w}")
                         }
                     }
-                    2 => {
+                    (4, FormatMode::Str) => {
+                        let w = app.mem.load32(addr);
+                        ascii_bytes(&w.to_le_bytes())
+                    }
+                    (2, FormatMode::Hex) => {
                         let w = app.mem.load16(addr);
-                        if app.show_hex {
-                            format!("0x{w:04x}")
-                        } else if app.show_signed {
+                        format!("0x{w:04x}")
+                    }
+                    (2, FormatMode::Dec) => {
+                        let w = app.mem.load16(addr);
+                        if app.show_signed {
                             format!("{}", (w as i16))
                         } else {
                             format!("{w}")
                         }
                     }
-                    _ => {
+                    (2, FormatMode::Str) => {
+                        let w = app.mem.load16(addr);
+                        ascii_bytes(&w.to_le_bytes())
+                    }
+                    (_, FormatMode::Hex) => {
                         let w = app.mem.load8(addr);
-                        if app.show_hex {
-                            format!("0x{w:02x}")
-                        } else if app.show_signed {
+                        format!("0x{w:02x}")
+                    }
+                    (_, FormatMode::Dec) => {
+                        let w = app.mem.load8(addr);
+                        if app.show_signed {
                             format!("{}", (w as i8))
                         } else {
                             format!("{w}")
                         }
+                    }
+                    (_, FormatMode::Str) => {
+                        let w = app.mem.load8(addr);
+                        ascii_bytes(&[w])
                     }
                 };
                 let mut text = format!("0x{addr:08x}: {val_str}");
@@ -191,12 +218,16 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
         if in_mem_range(app, addr) {
             let w = app.mem.load32(addr);
             let marker = if addr == app.cpu.pc { "▶" } else { " " };
-            let val_str = if app.show_hex {
-                format!("0x{w:08x}")
-            } else if app.show_signed {
-                format!("{}", w as i32)
-            } else {
-                format!("{w}")
+            let val_str = match app.fmt_mode {
+                FormatMode::Hex => format!("0x{w:08x}"),
+                FormatMode::Dec => {
+                    if app.show_signed {
+                        format!("{}", w as i32)
+                    } else {
+                        format!("{w}")
+                    }
+                }
+                FormatMode::Str => ascii_bytes(&w.to_le_bytes()),
             };
             let dis = disasm_word(w);
             let mut item = ListItem::new(format!("{marker} 0x{addr:08x}: {val_str}  {dis}"));
@@ -265,10 +296,10 @@ fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
     } else {
         ("RAM", Color::Green)
     };
-    let (fmt_text, fmt_color) = if app.show_hex {
-        ("HEX", Color::Magenta)
-    } else {
-        ("DEC", Color::Cyan)
+    let (fmt_text, fmt_color) = match app.fmt_mode {
+        FormatMode::Hex => ("HEX", Color::Magenta),
+        FormatMode::Dec => ("DEC", Color::Cyan),
+        FormatMode::Str => ("STR", Color::Yellow),
     };
     let (sign_text, sign_color) = if app.show_signed {
         ("SGN", Color::LightGreen)
@@ -668,6 +699,16 @@ fn render_console(f: &mut Frame, area: Rect, app: &App) {
     let arrow_area = Rect::new(arrow_x, arrow_y, 1, 1);
     let arrow = Paragraph::new("▲").style(arrow_style);
     f.render_widget(arrow, arrow_area);
+
+    let clear_style = if app.hover_console_clear {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let clear_x = area.x + area.width.saturating_sub(6);
+    let clear_area = Rect::new(clear_x, area.y, 5, 1);
+    let clear = Paragraph::new("[CLR]").style(clear_style);
+    f.render_widget(clear, clear_area);
 }
 
 fn disasm_word(w: u32) -> String {
@@ -726,6 +767,13 @@ fn pretty_instr(i: &falcon::instruction::Instruction) -> String {
         Jal { rd, imm } => format!("jal  x{rd}, {imm}"),
         Jalr { rd, rs1, imm } => format!("jalr x{rd}, x{rs1}, {imm}"),
         Ecall => "ecall".to_string(),
-        Ebreak => "ebreak".to_string(),
+        Halt => "halt".to_string(),
     }
+}
+
+fn ascii_bytes(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '.' })
+        .collect()
 }

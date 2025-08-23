@@ -36,6 +36,13 @@ pub(super) enum MemRegion {
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
+pub(super) enum FormatMode {
+    Hex,
+    Dec,
+    Str,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub(super) enum RunButton {
     View,
     Format,
@@ -73,7 +80,7 @@ pub struct App {
     pub(super) mem_view_bytes: u32,
     pub(super) mem_region: MemRegion,
     pub(super) show_registers: bool,
-    pub(super) show_hex: bool,
+    pub(super) fmt_mode: FormatMode,
     pub(super) show_signed: bool,
     pub(super) imem_width: u16,
     pub(super) hover_imem_bar: bool,
@@ -82,6 +89,7 @@ pub struct App {
     pub(super) imem_width_start: u16,
     pub(super) console_height: u16,
     pub(super) hover_console_bar: bool,
+    pub(super) hover_console_clear: bool,
     pub(super) console_drag: bool,
     pub(super) console_drag_start_y: u16,
     pub(super) console_height_start: u16,
@@ -137,7 +145,7 @@ impl App {
             mem_view_bytes: 4,
             mem_region: MemRegion::Data,
             show_registers: true,
-            show_hex: true,
+            fmt_mode: FormatMode::Hex,
             show_signed: false,
             imem_width: 38,
             hover_imem_bar: false,
@@ -146,6 +154,7 @@ impl App {
             imem_width_start: 38,
             console_height: 5,
             hover_console_bar: false,
+            hover_console_clear: false,
             console_drag: false,
             console_drag_start_y: 0,
             console_height_start: 5,

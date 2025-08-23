@@ -190,8 +190,8 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             }
             return cont;
         }
-        Instruction::Ebreak => {
-            console.push_error(format!("EBREAK at 0x{pc:08X}"));
+        Instruction::Halt => {
+            console.push_error(format!("HALT at 0x{pc:08X}"));
             return false;
         }
         _ => {}
@@ -221,11 +221,11 @@ mod tests {
     use crate::falcon::{Ram, instruction::Instruction};
 
     #[test]
-    fn ebreak_halts() {
+    fn halt_halts() {
         let mut cpu = Cpu::default();
         let mut mem = Ram::new(4);
         let mut console = crate::ui::Console::default();
-        let inst = encoder::encode(Instruction::Ebreak).unwrap();
+        let inst = encoder::encode(Instruction::Halt).unwrap();
         mem.store32(0, inst);
         assert!(!step(&mut cpu, &mut mem, &mut console));
     }
@@ -243,9 +243,9 @@ mod tests {
             imm: 0,
         })
         .unwrap();
-        let ebreak = encoder::encode(Instruction::Ebreak).unwrap();
+        let halt = encoder::encode(Instruction::Halt).unwrap();
         mem.store32(0, sw);
-        mem.store32(4, ebreak);
+        mem.store32(4, halt);
         assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(mem.load32(0x20), 0xDEADBEEF);
         assert!(!step(&mut cpu, &mut mem, &mut console));
@@ -309,9 +309,9 @@ mod tests {
         cpu.write(10, addr);
         cpu.write(17, 3);
         let ecall = encoder::encode(Instruction::Ecall).unwrap();
-        let ebreak = encoder::encode(Instruction::Ebreak).unwrap();
+        let halt = encoder::encode(Instruction::Halt).unwrap();
         mem.store32(0, ecall);
-        mem.store32(4, ebreak);
+        mem.store32(4, halt);
 
         assert!(!step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.pc, 0);

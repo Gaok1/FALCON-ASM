@@ -578,11 +578,11 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             Ok(Ecall)
         }
-        "ebreak" => {
+        "halt" => {
             if !ops.is_empty() {
-                return Err("ebreak takes no operands".into());
+                return Err("halt takes no operands".into());
             }
-            Ok(Ebreak)
+            Ok(Halt)
         }
 
         _ => Err(format!("unsupported mnemonic: {mnemonic}")),
@@ -934,10 +934,10 @@ mod tests {
     #[test]
     fn call_expands_to_jal_ra() {
         // Simple program with a call to a local label
-        let asm = ".text\ncall func\nfunc: ebreak";
+        let asm = ".text\ncall func\nfunc: halt";
         let prog = assemble(asm, 0).expect("assemble");
 
-        // Should emit: JAL ra, func; EBREAK
+        // Should emit: JAL ra, func; HALT
         assert_eq!(prog.text.len(), 2);
 
         let expected_jal = encode(Instruction::Jal { rd: 1, imm: 4 }).expect("encode jal");

@@ -41,7 +41,8 @@ pub fn disasm(word: u32) -> String {
             Instruction::Jalr{rd,rs1,imm}  => format!("jalr x{rd}, x{rs1}, {}", imm),
             Instruction::Lw  {rd,rs1,imm}  => format!("lw   x{rd}, {}(x{rs1})", imm),
             Instruction::Sw  {rs2,rs1,imm} => format!("sw   x{rs2}, {}(x{rs1})", imm),
-            Instruction::Ecall             => "ecall".into(),
+            Instruction::Ecall => "ecall".into(),
+            Instruction::Halt => "halt".into(),
             other => format!("{other:?}"), // fallback para o resto
         },
         Err(e) => format!(".word 0x{word:08x} ; {e}"),

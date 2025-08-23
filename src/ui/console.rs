@@ -48,5 +48,10 @@ impl Console {
     pub fn read_line(&mut self) -> Option<String> {
         self.input.pop_front()
     }
+
+    pub fn clear(&mut self) {
+        self.lines.clear();
+        self.scroll = 0;
+    }
 }
 

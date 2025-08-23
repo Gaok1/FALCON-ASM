@@ -64,7 +64,10 @@ pub(super) fn decode_auipc(word:u32)->Result<Instruction,&'static str>{
     Ok(Instruction::Auipc{ rd, imm })
 }
 
-pub(super) fn decode_system(_word:u32)->Result<Instruction,&'static str>{
-    // MVP: treat ECALL/EBREAK as halt
-    Ok(Instruction::Ecall)
+pub(super) fn decode_system(word: u32) -> Result<Instruction, &'static str> {
+    match word {
+        0x0000_0073 => Ok(Instruction::Ecall),
+        0x0010_0073 => Ok(Instruction::Halt),
+        _ => Err("Unknown system instruction"),
+    }
 }

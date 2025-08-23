@@ -29,7 +29,7 @@ docs/
 - **Branches:** `BEQ, BNE, BLT, BGE, BLTU, BGEU`
 - **U/J:** `LUI, AUIPC, JAL`
 - **JALR**
-- **SYSTEM:** `ECALL`, `EBREAK`
+- **SYSTEM:** `ECALL`, `HALT`
 
 *Missing:* FENCE/CSR and floating point.
 
@@ -48,4 +48,4 @@ Requires [Rust](https://rustup.rs).
 cargo run
 ```
 
-The example program in `main.rs` assembles a small routine, loads code and data into memory and executes until it encounters `ecall`.
+The example program in `main.rs` assembles a small routine, loads code and data into memory and executes until it encounters `halt` or an unknown syscall.
