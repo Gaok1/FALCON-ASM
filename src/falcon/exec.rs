@@ -23,18 +23,147 @@ pub fn step<B: Bus>(
     cpu.pc = pc.wrapping_add(4);
 
     match instr {
-        // R
+        i @ (
+            Instruction::Add { .. }
+                | Instruction::Sub { .. }
+                | Instruction::And { .. }
+                | Instruction::Or { .. }
+                | Instruction::Xor { .. }
+                | Instruction::Sll { .. }
+                | Instruction::Srl { .. }
+                | Instruction::Sra { .. }
+                | Instruction::Slt { .. }
+                | Instruction::Sltu { .. }
+                | Instruction::Mul { .. }
+                | Instruction::Mulh { .. }
+                | Instruction::Mulhsu { .. }
+                | Instruction::Mulhu { .. }
+                | Instruction::Div { .. }
+                | Instruction::Divu { .. }
+                | Instruction::Rem { .. }
+                | Instruction::Remu { .. }
+        ) => {
+            return exec_rtype(i, cpu, mem, console);
+        }
+        i @ (
+            Instruction::Addi { .. }
+                | Instruction::Andi { .. }
+                | Instruction::Ori { .. }
+                | Instruction::Xori { .. }
+                | Instruction::Slti { .. }
+                | Instruction::Sltiu { .. }
+                | Instruction::Slli { .. }
+                | Instruction::Srli { .. }
+                | Instruction::Srai { .. }
+        ) => {
+            return exec_itype(i, cpu, mem, console);
+        }
+        i @ (
+            Instruction::Lb { .. }
+                | Instruction::Lh { .. }
+                | Instruction::Lw { .. }
+                | Instruction::Lbu { .. }
+                | Instruction::Lhu { .. }
+        ) => {
+            return exec_loads(i, cpu, mem, console);
+        }
+        i @ (Instruction::Sb { .. } | Instruction::Sh { .. } | Instruction::Sw { .. }) => {
+            return exec_stores(i, cpu, mem, console);
+        }
+
+        Instruction::Beq { rs1, rs2, imm } if cpu.read(rs1) == cpu.read(rs2) => {
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+        Instruction::Bne { rs1, rs2, imm } if cpu.read(rs1) != cpu.read(rs2) => {
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+        Instruction::Blt { rs1, rs2, imm } if (cpu.read(rs1) as i32) < (cpu.read(rs2) as i32) => {
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+        Instruction::Bge { rs1, rs2, imm } if (cpu.read(rs1) as i32) >= (cpu.read(rs2) as i32) => {
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+        Instruction::Bltu { rs1, rs2, imm } if cpu.read(rs1) < cpu.read(rs2) => {
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+        Instruction::Bgeu { rs1, rs2, imm } if cpu.read(rs1) >= cpu.read(rs2) => {
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+
+        Instruction::Jal { rd, imm } => {
+            cpu.write(rd, pc.wrapping_add(4));
+            cpu.pc = pc.wrapping_add(imm as u32);
+            return Ok(true);
+        }
+        Instruction::Jalr { rd, rs1, imm } => {
+            let target = (cpu.read(rs1).wrapping_add(imm as u32)) & !1;
+            cpu.write(rd, pc.wrapping_add(4));
+            cpu.pc = target;
+            return Ok(true);
+        }
+        Instruction::Lui { rd, imm } => {
+            cpu.write(rd, imm as u32);
+            return Ok(true);
+        }
+        Instruction::Auipc { rd, imm } => {
+            cpu.write(rd, pc.wrapping_add(imm as u32));
+            return Ok(true);
+        }
+
+        Instruction::Ecall => {
+            let old_pc = pc;
+            let code = cpu.read(17);
+            let cont = handle_syscall(code, cpu, mem, console)?;
+            if !cont && console.reading {
+                cpu.pc = old_pc;
+                return Ok(false);
+            }
+            return Ok(cont);
+        }
+        Instruction::Halt => {
+            console.push_error(format!("HALT at 0x{pc:08X}"));
+            return Ok(false);
+        }
+        _ => {}
+    }
+
+    Ok(true)
+}
+
+fn exec_rtype<B: Bus>(
+    instr: Instruction,
+    cpu: &mut Cpu,
+    _mem: &mut B,
+    console: &mut Console,
+) -> Result<bool, FalconError> {
+    match instr {
         Instruction::Add { rd, rs1, rs2 } => {
-            cpu.write(rd, cpu.read(rs1).wrapping_add(cpu.read(rs2)))
+            cpu.write(rd, cpu.read(rs1).wrapping_add(cpu.read(rs2)));
         }
         Instruction::Sub { rd, rs1, rs2 } => {
-            cpu.write(rd, cpu.read(rs1).wrapping_sub(cpu.read(rs2)))
+            cpu.write(rd, cpu.read(rs1).wrapping_sub(cpu.read(rs2)));
         }
-        Instruction::And { rd, rs1, rs2 } => cpu.write(rd, cpu.read(rs1) & cpu.read(rs2)),
-        Instruction::Or { rd, rs1, rs2 } => cpu.write(rd, cpu.read(rs1) | cpu.read(rs2)),
-        Instruction::Xor { rd, rs1, rs2 } => cpu.write(rd, cpu.read(rs1) ^ cpu.read(rs2)),
-        Instruction::Sll { rd, rs1, rs2 } => cpu.write(rd, cpu.read(rs1) << (cpu.read(rs2) & 0x1F)),
-        Instruction::Srl { rd, rs1, rs2 } => cpu.write(rd, cpu.read(rs1) >> (cpu.read(rs2) & 0x1F)),
+        Instruction::And { rd, rs1, rs2 } => {
+            cpu.write(rd, cpu.read(rs1) & cpu.read(rs2));
+        }
+        Instruction::Or { rd, rs1, rs2 } => {
+            cpu.write(rd, cpu.read(rs1) | cpu.read(rs2));
+        }
+        Instruction::Xor { rd, rs1, rs2 } => {
+            cpu.write(rd, cpu.read(rs1) ^ cpu.read(rs2));
+        }
+        Instruction::Sll { rd, rs1, rs2 } => {
+            cpu.write(rd, cpu.read(rs1) << (cpu.read(rs2) & 0x1F));
+        }
+        Instruction::Srl { rd, rs1, rs2 } => {
+            cpu.write(rd, cpu.read(rs1) >> (cpu.read(rs2) & 0x1F));
+        }
         Instruction::Sra { rd, rs1, rs2 } => {
             let s = (cpu.read(rs2) & 0x1F) as u32;
             cpu.write(rd, ((cpu.read(rs1) as i32) >> s) as u32);
@@ -43,7 +172,9 @@ pub fn step<B: Bus>(
             let v = (cpu.read(rs1) as i32) < (cpu.read(rs2) as i32);
             cpu.write(rd, v as u32);
         }
-        Instruction::Sltu { rd, rs1, rs2 } => cpu.write(rd, (cpu.read(rs1) < cpu.read(rs2)) as u32),
+        Instruction::Sltu { rd, rs1, rs2 } => {
+            cpu.write(rd, (cpu.read(rs1) < cpu.read(rs2)) as u32);
+        }
         Instruction::Mul { rd, rs1, rs2 } => {
             let res = (cpu.read(rs1) as i32 as i64).wrapping_mul(cpu.read(rs2) as i32 as i64);
             cpu.write(rd, res as u32);
@@ -67,7 +198,7 @@ pub fn step<B: Bus>(
                 console.push_error("Division by zero");
                 return Ok(false);
             }
-            let val = { num.wrapping_div(den) };
+            let val = num.wrapping_div(den);
             cpu.write(rd, val as u32);
         }
         Instruction::Divu { rd, rs1, rs2 } => {
@@ -96,15 +227,32 @@ pub fn step<B: Bus>(
                 return Ok(false);
             }
             let val = cpu.read(rs1).wrapping_rem(den);
-
             cpu.write(rd, val);
         }
+        _ => unreachable!(),
+    }
+    Ok(true)
+}
 
-        // I
-        Instruction::Addi { rd, rs1, imm } => cpu.write(rd, cpu.read(rs1).wrapping_add(imm as u32)),
-        Instruction::Andi { rd, rs1, imm } => cpu.write(rd, cpu.read(rs1) & (imm as u32)),
-        Instruction::Ori { rd, rs1, imm } => cpu.write(rd, cpu.read(rs1) | (imm as u32)),
-        Instruction::Xori { rd, rs1, imm } => cpu.write(rd, cpu.read(rs1) ^ (imm as u32)),
+fn exec_itype<B: Bus>(
+    instr: Instruction,
+    cpu: &mut Cpu,
+    _mem: &mut B,
+    _console: &mut Console,
+) -> Result<bool, FalconError> {
+    match instr {
+        Instruction::Addi { rd, rs1, imm } => {
+            cpu.write(rd, cpu.read(rs1).wrapping_add(imm as u32));
+        }
+        Instruction::Andi { rd, rs1, imm } => {
+            cpu.write(rd, cpu.read(rs1) & (imm as u32));
+        }
+        Instruction::Ori { rd, rs1, imm } => {
+            cpu.write(rd, cpu.read(rs1) | (imm as u32));
+        }
+        Instruction::Xori { rd, rs1, imm } => {
+            cpu.write(rd, cpu.read(rs1) ^ (imm as u32));
+        }
         Instruction::Slti { rd, rs1, imm } => {
             let v = (cpu.read(rs1) as i32) < imm;
             cpu.write(rd, v as u32);
@@ -112,12 +260,27 @@ pub fn step<B: Bus>(
         Instruction::Sltiu { rd, rs1, imm } => {
             cpu.write(rd, (cpu.read(rs1) < imm as u32) as u32);
         }
-        Instruction::Slli { rd, rs1, shamt } => cpu.write(rd, cpu.read(rs1) << (shamt & 0x1F)),
-        Instruction::Srli { rd, rs1, shamt } => cpu.write(rd, cpu.read(rs1) >> (shamt & 0x1F)),
-        Instruction::Srai { rd, rs1, shamt } => {
-            cpu.write(rd, ((cpu.read(rs1) as i32) >> (shamt & 0x1F)) as u32)
+        Instruction::Slli { rd, rs1, shamt } => {
+            cpu.write(rd, cpu.read(rs1) << (shamt & 0x1F));
         }
+        Instruction::Srli { rd, rs1, shamt } => {
+            cpu.write(rd, cpu.read(rs1) >> (shamt & 0x1F));
+        }
+        Instruction::Srai { rd, rs1, shamt } => {
+            cpu.write(rd, ((cpu.read(rs1) as i32) >> (shamt & 0x1F)) as u32);
+        }
+        _ => unreachable!(),
+    }
+    Ok(true)
+}
 
+fn exec_loads<B: Bus>(
+    instr: Instruction,
+    cpu: &mut Cpu,
+    mem: &mut B,
+    _console: &mut Console,
+) -> Result<bool, FalconError> {
+    match instr {
         Instruction::Lb { rd, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
             cpu.write(rd, (mem.load8(a)? as i8 as i32) as u32);
@@ -138,7 +301,18 @@ pub fn step<B: Bus>(
             let a = cpu.read(rs1).wrapping_add(imm as u32);
             cpu.write(rd, mem.load16(a)? as u32);
         }
+        _ => unreachable!(),
+    }
+    Ok(true)
+}
 
+fn exec_stores<B: Bus>(
+    instr: Instruction,
+    cpu: &mut Cpu,
+    mem: &mut B,
+    _console: &mut Console,
+) -> Result<bool, FalconError> {
+    match instr {
         Instruction::Sb { rs2, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
             mem.store8(a, cpu.read(rs2) as u8)?;
@@ -151,57 +325,9 @@ pub fn step<B: Bus>(
             let a = cpu.read(rs1).wrapping_add(imm as u32);
             mem.store32(a, cpu.read(rs2))?;
         }
-
-        // Branches (offset relative to the PC of the fetched instruction)
-        Instruction::Beq { rs1, rs2, imm } if cpu.read(rs1) == cpu.read(rs2) => {
-            cpu.pc = pc.wrapping_add(imm as u32)
-        }
-        Instruction::Bne { rs1, rs2, imm } if cpu.read(rs1) != cpu.read(rs2) => {
-            cpu.pc = pc.wrapping_add(imm as u32)
-        }
-        Instruction::Blt { rs1, rs2, imm } if (cpu.read(rs1) as i32) < (cpu.read(rs2) as i32) => {
-            cpu.pc = pc.wrapping_add(imm as u32)
-        }
-        Instruction::Bge { rs1, rs2, imm } if (cpu.read(rs1) as i32) >= (cpu.read(rs2) as i32) => {
-            cpu.pc = pc.wrapping_add(imm as u32)
-        }
-        Instruction::Bltu { rs1, rs2, imm } if cpu.read(rs1) < cpu.read(rs2) => {
-            cpu.pc = pc.wrapping_add(imm as u32)
-        }
-        Instruction::Bgeu { rs1, rs2, imm } if cpu.read(rs1) >= cpu.read(rs2) => {
-            cpu.pc = pc.wrapping_add(imm as u32)
-        }
-
-        Instruction::Jal { rd, imm } => {
-            cpu.write(rd, pc.wrapping_add(4));
-            cpu.pc = pc.wrapping_add(imm as u32);
-        }
-        Instruction::Jalr { rd, rs1, imm } => {
-            let target = (cpu.read(rs1).wrapping_add(imm as u32)) & !1;
-            cpu.write(rd, pc.wrapping_add(4));
-            cpu.pc = target;
-        }
-        Instruction::Lui { rd, imm } => cpu.write(rd, imm as u32),
-        Instruction::Auipc { rd, imm } => cpu.write(rd, pc.wrapping_add(imm as u32)),
-
-        Instruction::Ecall => {
-            let old_pc = pc;
-            let code = cpu.read(17);
-            let cont = handle_syscall(code, cpu, mem, console)?;
-            if !cont && console.reading {
-                cpu.pc = old_pc;
-                return Ok(false);
-            }
-            return Ok(cont);
-        }
-        Instruction::Halt => {
-            console.push_error(format!("HALT at 0x{pc:08X}"));
-            return Ok(false);
-        }
-        _ => {}
-        }
-        Ok(true)
-
+        _ => unreachable!(),
+    }
+    Ok(true)
 }
 
 // em src/falcon/exec.rs (logo abaixo de `step`)
@@ -225,7 +351,7 @@ pub fn run<B: crate::falcon::memory::Bus>(
 mod tests {
     use super::*;
     use crate::falcon::encoder;
-    use crate::falcon::{Ram, instruction::Instruction};
+    use crate::falcon::{instruction::Instruction, Ram};
 
     #[test]
     fn halt_halts() {
@@ -242,8 +368,8 @@ mod tests {
         let mut cpu = Cpu::default();
         let mut mem = Ram::new(64);
         let mut console = crate::ui::Console::default();
-        cpu.write(1, 0xDEADBEEF); // value to be stored
-        cpu.write(2, 0x20); // base address
+        cpu.write(1, 0xDEADBEEF);
+        cpu.write(2, 0x20);
         let sw = encoder::encode(Instruction::Sw {
             rs2: 1,
             rs1: 2,
@@ -255,6 +381,68 @@ mod tests {
         mem.store32(4, halt).unwrap();
         assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
         assert_eq!(mem.load32(0x20).unwrap(), 0xDEADBEEF);
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
+    }
+
+    #[test]
+    fn add_adds() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(8);
+        let mut console = crate::ui::Console::default();
+        cpu.write(1, 2);
+        cpu.write(2, 3);
+        let add = encoder::encode(Instruction::Add {
+            rd: 3,
+            rs1: 1,
+            rs2: 2,
+        })
+        .unwrap();
+        let halt = encoder::encode(Instruction::Halt).unwrap();
+        mem.store32(0, add).unwrap();
+        mem.store32(4, halt).unwrap();
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
+        assert_eq!(cpu.read(3), 5);
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
+    }
+
+    #[test]
+    fn addi_adds_immediate() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(8);
+        let mut console = crate::ui::Console::default();
+        cpu.write(1, 5);
+        let addi = encoder::encode(Instruction::Addi {
+            rd: 2,
+            rs1: 1,
+            imm: 3,
+        })
+        .unwrap();
+        let halt = encoder::encode(Instruction::Halt).unwrap();
+        mem.store32(0, addi).unwrap();
+        mem.store32(4, halt).unwrap();
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
+        assert_eq!(cpu.read(2), 8);
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
+    }
+
+    #[test]
+    fn lw_loads_word() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(64);
+        let mut console = crate::ui::Console::default();
+        mem.store32(0x20, 0xCAFEBABE).unwrap();
+        cpu.write(1, 0x20);
+        let lw = encoder::encode(Instruction::Lw {
+            rd: 2,
+            rs1: 1,
+            imm: 0,
+        })
+        .unwrap();
+        let halt = encoder::encode(Instruction::Halt).unwrap();
+        mem.store32(0, lw).unwrap();
+        mem.store32(4, halt).unwrap();
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
+        assert_eq!(cpu.read(2), 0xCAFEBABE);
         assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
     }
 
@@ -332,5 +520,4 @@ mod tests {
 
         assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
     }
-
 }
