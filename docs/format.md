@@ -196,9 +196,15 @@ Other formats (I, S, B, U, J) rearrange fields and immediates.
   - `li rd, imm12` → `addi rd, x0, imm`
   - `subi rd, rs1, imm` → `addi rd, rs1, -imm`
   - `j label` → `jal x0, label`
+  - `call label` → `jal ra, label`
   - `jr rs1` → `jalr x0, rs1, 0`
   - `ret` → `jalr x0, ra, 0`
   - `la rd, label` → emits `lui`/`addi` to load a data address
+  - `push rs` → `addi sp, sp, -4` ; `sw rs, 0(sp)`
+  - `pop rd` → `lw rd, 0(sp)` ; `addi sp, sp, 4`
+  - `print rd` → `a7=1, a0=rd, ecall`
+  - `printString label|rd` → `a7=2, a0=addr, ecall`
+  - `read` → `a7=3, a0=dest, ecall`
 
 ## Example Code
 

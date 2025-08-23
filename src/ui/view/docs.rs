@@ -1,6 +1,6 @@
-use ratatui::Frame;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::Frame;
 use std::cmp::min;
 
 use super::App;
@@ -52,5 +52,5 @@ System:
 Notes:
 • PC advances +4 each instruction. Branch/JAL immediates are byte offsets (must be even).
 • Loads/Stores syntax: imm(rs1). Labels supported by 2-pass assembler.
-• Pseudoinstructions: nop, mv, li(12-bit), j, jr, ret, subi.
+• Pseudoinstructions: nop, mv, li(12-bit), j, call, jr, ret, subi, la, push, pop, print, printString, read.
 "#;

@@ -58,6 +58,9 @@ Labels (`label:`) can be defined in any segment. To load a label address, use th
 - `la rd, label` → loads the address of `label`
 - `push rs` → `addi sp, sp, -4` ; `sw rs, 0(sp)`
 - `pop rd` → `lw rd, 0(sp)` ; `addi sp, sp, 4`
+- `print rd` → sets `a7=1`, prints the value in `rd`
+- `printString label|rd` → sets `a7=2`, prints string at label/address
+- `read` → sets `a7=3`, reads input into memory pointed by `a0`
 
 ## Registers and Memory
 
@@ -128,6 +131,7 @@ The emulator executes instructions while `step` returns `true`.
 
 ### Console
 
-The Run tab now features a bottom console where syscalls `print`/`read` perform I/O.
-Use it to view program output or type responses. Scroll with `Ctrl+Up/Down` to review
-previous lines.
+The Run tab now features a bottom console where syscalls `print`, `printString` and
+`read` perform I/O. `print rd` outputs the decimal value of a register, `printString
+label|rd` prints a NUL-terminated string and `read` stores a line at the address in
+`a0`. Scroll with `Ctrl+Up/Down` to review previous lines.
