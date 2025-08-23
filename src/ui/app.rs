@@ -1,8 +1,8 @@
 use super::{
+    console::Console,
     editor::Editor,
     input::{handle_key, handle_mouse},
     view::ui,
-    console::Console,
 };
 use crate::falcon::{self, Cpu, Ram};
 use crossterm::{
@@ -263,6 +263,9 @@ impl App {
         };
         if !alive {
             self.is_running = false;
+            if !self.console.reading {
+                self.faulted = true;
+            }
         }
     }
 }

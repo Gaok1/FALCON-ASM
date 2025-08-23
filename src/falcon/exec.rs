@@ -9,7 +9,12 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
     let word = mem.load32(pc);
     let instr = match crate::falcon::decoder::decode(word) {
         Ok(i) => i,
-        Err(_) => return false, // signal error/halt
+        Err(_) => {
+            console.push_error(format!(
+                "Invalid instruction 0x{word:08X} at 0x{pc:08X}"
+            ));
+            return false;
+        }
     };
     cpu.pc = pc.wrapping_add(4);
 
@@ -55,6 +60,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             let num = cpu.read(rs1) as i32;
             let den = cpu.read(rs2) as i32;
             if den == 0 {
+                console.push_error("Division by zero");
                 return false;
             }
             let val = { num.wrapping_div(den) };
@@ -63,6 +69,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
         Instruction::Divu { rd, rs1, rs2 } => {
             let den = cpu.read(rs2);
             if den == 0 {
+                console.push_error("Division by zero");
                 return false;
             }
             let val = cpu.read(rs1).wrapping_div(den);
@@ -72,6 +79,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             let num = cpu.read(rs1) as i32;
             let den = cpu.read(rs2) as i32;
             if den == 0 {
+                console.push_error("Division by zero");
                 return false;
             }
             let val = num.wrapping_rem(den);
@@ -80,6 +88,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
         Instruction::Remu { rd, rs1, rs2 } => {
             let den = cpu.read(rs2);
             if den == 0 {
+                console.push_error("Division by zero");
                 return false;
             }
             let val = cpu.read(rs1).wrapping_rem(den);
@@ -173,11 +182,12 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
 
         Instruction::Ecall => {
             let code = cpu.read(17);
-            if !handle_syscall(code, cpu, mem, console) {
-                return false;
-            }
+            return handle_syscall(code, cpu, mem, console);
         }
-        Instruction::Ebreak => return false, // HALT
+        Instruction::Ebreak => {
+            console.push_error(format!("EBREAK at 0x{pc:08X}"));
+            return false;
+        }
         _ => {}
     }
     true
@@ -201,7 +211,7 @@ pub fn run<B: crate::falcon::memory::Bus>(
 mod tests {
     use super::*;
     use crate::falcon::encoder;
-    use crate::falcon::{instruction::Instruction, Ram};
+    use crate::falcon::{Ram, instruction::Instruction};
 
     #[test]
     fn ebreak_halts() {
@@ -266,15 +276,19 @@ mod tests {
     }
 
     #[test]
-    fn syscall_read_int() {
+    fn syscall_read_string() {
         let mut cpu = Cpu::default();
-        let mut mem = Ram::new(4);
+        let mut mem = Ram::new(64);
         let mut console = crate::ui::Console::default();
-        console.push_input("123");
+        console.push_input("hi");
+        let addr = 8u32;
+        cpu.write(10, addr);
         cpu.write(17, 3);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
         assert!(step(&mut cpu, &mut mem, &mut console));
-        assert_eq!(cpu.read(10), 123);
+        assert_eq!(mem.load8(addr), b'h');
+        assert_eq!(mem.load8(addr + 1), b'i');
+        assert_eq!(mem.load8(addr + 2), 0);
     }
 }

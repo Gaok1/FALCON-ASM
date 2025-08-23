@@ -644,7 +644,13 @@ fn render_console(f: &mut Frame, area: Rect, app: &App) {
     let end = total.saturating_sub(scroll);
     let mut lines: Vec<Line> = app.console.lines[start..end]
         .iter()
-        .map(|l| Line::from(l.as_str()))
+        .map(|l| {
+            if l.is_error {
+                Line::styled(l.text.as_str(), Style::default().fg(Color::Red))
+            } else {
+                Line::from(l.text.as_str())
+            }
+        })
         .collect();
     if app.console.reading {
         lines.push(Line::from(format!("> {}", app.console.current)));

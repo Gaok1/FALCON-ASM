@@ -749,16 +749,16 @@ fn parse_read(s: &str) -> Result<Vec<Instruction>, String> {
     let rd = parse_reg(&ops[0]).ok_or("invalid rd")?;
     Ok(vec![
         Instruction::Addi {
+            rd: 10,
+            rs1: rd,
+            imm: 0,
+        },
+        Instruction::Addi {
             rd: 17,
             rs1: 0,
             imm: 3,
         },
         Instruction::Ecall,
-        Instruction::Addi {
-            rd,
-            rs1: 10,
-            imm: 0,
-        },
     ])
 }
 
@@ -1096,6 +1096,12 @@ mod tests {
         let asm = ".text\nread a1";
         let prog = assemble(asm, 0).expect("assemble");
         assert_eq!(prog.text.len(), 3);
+        let expected_mv = encode(Instruction::Addi {
+            rd: 10,
+            rs1: 11,
+            imm: 0,
+        })
+        .expect("encode addi");
         let expected_li = encode(Instruction::Addi {
             rd: 17,
             rs1: 0,
@@ -1103,15 +1109,9 @@ mod tests {
         })
         .expect("encode addi");
         let expected_ecall = encode(Instruction::Ecall).expect("encode ecall");
-        let expected_mv = encode(Instruction::Addi {
-            rd: 11,
-            rs1: 10,
-            imm: 0,
-        })
-        .expect("encode addi");
-        assert_eq!(prog.text[0], expected_li);
-        assert_eq!(prog.text[1], expected_ecall);
-        assert_eq!(prog.text[2], expected_mv);
+        assert_eq!(prog.text[0], expected_mv);
+        assert_eq!(prog.text[1], expected_li);
+        assert_eq!(prog.text[2], expected_ecall);
     }
 
     #[test]
