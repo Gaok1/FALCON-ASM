@@ -93,9 +93,9 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
                         16
                     };
                     pc_text = pc_text.wrapping_add(inc);
-                } else if ltrim.starts_with("read ") {
+                } else if ltrim == "read" {
                     items.push((pc_text, LineKind::Read(ltrim.to_string()), *line_no));
-                    pc_text = pc_text.wrapping_add(12);
+                    pc_text = pc_text.wrapping_add(8);
                 } else {
                     items.push((pc_text, LineKind::Instr(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(4);
@@ -738,21 +738,13 @@ fn parse_print_string(s: &str, labels: &HashMap<String, u32>) -> Result<Vec<Inst
 }
 
 fn parse_read(s: &str) -> Result<Vec<Instruction>, String> {
-    // "read rd"
+    // "read" (data written to memory pointed by a0)
     let mut parts = s.split_whitespace();
-    parts.next();
-    let rest = parts.collect::<Vec<_>>().join(" ");
-    let ops = split_operands(&rest);
-    if ops.len() != 1 {
-        return Err("expected 'rd'".into());
+    parts.next(); // consume mnemonic
+    if parts.next().is_some() {
+        return Err("read takes no operands".into());
     }
-    let rd = parse_reg(&ops[0]).ok_or("invalid rd")?;
     Ok(vec![
-        Instruction::Addi {
-            rd: 10,
-            rs1: rd,
-            imm: 0,
-        },
         Instruction::Addi {
             rd: 17,
             rs1: 0,
@@ -1093,15 +1085,9 @@ mod tests {
 
     #[test]
     fn read_expands_correctly() {
-        let asm = ".text\nread a1";
+        let asm = ".text\nread";
         let prog = assemble(asm, 0).expect("assemble");
-        assert_eq!(prog.text.len(), 3);
-        let expected_mv = encode(Instruction::Addi {
-            rd: 10,
-            rs1: 11,
-            imm: 0,
-        })
-        .expect("encode addi");
+        assert_eq!(prog.text.len(), 2);
         let expected_li = encode(Instruction::Addi {
             rd: 17,
             rs1: 0,
@@ -1109,9 +1095,8 @@ mod tests {
         })
         .expect("encode addi");
         let expected_ecall = encode(Instruction::Ecall).expect("encode ecall");
-        assert_eq!(prog.text[0], expected_mv);
-        assert_eq!(prog.text[1], expected_li);
-        assert_eq!(prog.text[2], expected_ecall);
+        assert_eq!(prog.text[0], expected_li);
+        assert_eq!(prog.text[1], expected_ecall);
     }
 
     #[test]
