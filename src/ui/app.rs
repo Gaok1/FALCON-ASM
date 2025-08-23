@@ -2,6 +2,7 @@ use super::{
     editor::Editor,
     input::{handle_key, handle_mouse},
     view::ui,
+    console::Console,
 };
 use crate::falcon::{self, Cpu, Ram};
 use crossterm::{
@@ -95,6 +96,9 @@ pub struct App {
     pub(super) mouse_y: u16,
     pub(super) hover_tab: Option<Tab>,
     pub(super) hover_run_button: Option<RunButton>,
+
+    // Console for program I/O
+    pub(super) console: Console,
 }
 
 impl App {
@@ -147,6 +151,7 @@ impl App {
             mouse_y: 0,
             hover_tab: None,
             hover_run_button: None,
+            console: Console::default(),
         }
     }
 
@@ -237,7 +242,7 @@ impl App {
         self.prev_x = self.cpu.x; // snapshot before step
         self.prev_pc = self.cpu.pc;
         let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            falcon::exec::step(&mut self.cpu, &mut self.mem)
+            falcon::exec::step(&mut self.cpu, &mut self.mem, &mut self.console)
         }));
         let alive = match res {
             Ok(v) => v,

@@ -12,6 +12,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
             Constraint::Length(3),
             Constraint::Length(4),
             Constraint::Min(0),
+            Constraint::Length(5),
         ])
         .split(area);
 
@@ -253,6 +254,9 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     let fmt = detect_format(cur_word);
     render_bit_fields(f, mid_chunks[1], cur_word, fmt);
     render_field_values(f, mid_chunks[2], cur_word, fmt);
+
+    // --- Console ---
+    render_console(f, chunks[3], app);
 }
 
 fn render_run_status(f: &mut Frame, area: Rect, app: &App) {
@@ -608,6 +612,27 @@ fn render_field_values(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
 
     let para = Paragraph::new(text).wrap(Wrap { trim: true });
     f.render_widget(para, inner);
+}
+
+fn render_console(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("Console — Ctrl+Up/Down scroll");
+    let inner = block.inner(area);
+    let h = inner.height.saturating_sub(1) as usize;
+    let total = app.console.lines.len();
+    let scroll = app.console.scroll;
+    let start = total.saturating_sub(h + scroll);
+    let end = total.saturating_sub(scroll);
+    let mut lines: Vec<Line> = app.console.lines[start..end]
+        .iter()
+        .map(|l| Line::from(l.as_str()))
+        .collect();
+    if app.console.reading {
+        lines.push(Line::from(format!("> {}", app.console.current)));
+    }
+    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    f.render_widget(para, area);
 }
 
 fn disasm_word(w: u32) -> String {
