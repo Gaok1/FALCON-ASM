@@ -626,9 +626,15 @@ fn render_console(f: &mut Frame, area: Rect, app: &App) {
         return;
     }
 
+    let border_style = if app.hover_console_bar {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Console — Ctrl+Up/Down scroll");
+        .title("Console — Ctrl+Up/Down scroll")
+        .border_style(border_style);
     let inner = block.inner(area);
     let h = inner.height.saturating_sub(1) as usize;
     let total = app.console.lines.len();
