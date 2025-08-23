@@ -317,10 +317,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
                 return Err("expected 'rd, imm'".into());
             }
             let rd = get_reg(&ops[0])?;
-            let imm = get_imm(&ops[1])?;
-            if !(-2048..=2047).contains(&imm) {
-                return Err("li: immediate out of 12-bit range".into());
-            }
+            let imm = check_signed(get_imm(&ops[1])?, 12, "li")?;
             Ok(Addi { rd, rs1: 0, imm })
         }
         "j" => {
@@ -329,7 +326,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             Ok(Jal {
                 rd: 0,
-                imm: branch_imm(&ops[0], pc, labels)?,
+                imm: branch_imm(&ops[0], pc, labels, 21, "j")?,
             })
         }
         "call" => {
@@ -338,7 +335,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             Ok(Jal {
                 rd: 1,
-                imm: branch_imm(&ops[0], pc, labels)?,
+                imm: branch_imm(&ops[0], pc, labels, 21, "call")?,
             })
         }
         "jr" => {
@@ -364,11 +361,8 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             let rd = get_reg(&ops[0])?;
             let rs1 = get_reg(&ops[1])?;
-            let imm = get_imm(&ops[2])?;
-            let neg = -imm;
-            if !(-2048..=2047).contains(&neg) {
-                return Err("subi: immediate out of 12-bit range".into());
-            }
+            let neg = -get_imm(&ops[2])?;
+            let neg = check_signed(neg, 12, "subi")?;
             Ok(Addi { rd, rs1, imm: neg })
         }
 
@@ -411,7 +405,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             let rd = get_reg(&ops[0])?;
             let rs1 = get_reg(&ops[1])?;
-            let imm = get_imm(&ops[2])?;
+            let imm = check_signed(get_imm(&ops[2])?, 12, mnemonic.as_str())?;
             Ok(match mnemonic.as_str() {
                 "addi" => Addi { rd, rs1, imm },
                 "andi" => Andi { rd, rs1, imm },
@@ -440,6 +434,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
         // ---------- Loads (imm(rs1)) ----------
         "lb" | "lh" | "lw" | "lbu" | "lhu" => {
             let (rd, imm, rs1) = load_like(&ops)?;
+            let imm = check_signed(imm, 12, mnemonic.as_str())?;
             Ok(match mnemonic.as_str() {
                 "lb" => Lb { rd, rs1, imm },
                 "lh" => Lh { rd, rs1, imm },
@@ -453,6 +448,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
         // ---------- Stores (rs2, imm(rs1)) ----------
         "sb" | "sh" | "sw" => {
             let (rs2, imm, rs1) = store_like(&ops)?;
+            let imm = check_signed(imm, 12, mnemonic.as_str())?;
             Ok(match mnemonic.as_str() {
                 "sb" => Sb { rs2, rs1, imm },
                 "sh" => Sh { rs2, rs1, imm },
@@ -468,7 +464,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             let rs1 = get_reg(&ops[0])?;
             let rs2 = get_reg(&ops[1])?;
-            let imm = branch_imm(&ops[2], pc, labels)?;
+            let imm = branch_imm(&ops[2], pc, labels, 13, mnemonic.as_str())?;
             Ok(match mnemonic.as_str() {
                 "beq" => Beq { rs1, rs2, imm },
                 "bne" => Bne { rs1, rs2, imm },
@@ -486,7 +482,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
                 return Err("expected 'rd, imm'".into());
             }
             let rd = get_reg(&ops[0])?;
-            let imm = get_imm(&ops[1])?;
+            let imm = check_u_imm(get_imm(&ops[1])?, mnemonic.as_str())?;
             Ok(match mnemonic.as_str() {
                 "lui" => Lui { rd, imm },
                 "auipc" => Auipc { rd, imm },
@@ -501,12 +497,12 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             }
             if ops.len() == 1 {
                 let rd = 1; // ra
-                let imm = branch_imm(&ops[0], pc, labels)?;
+                let imm = branch_imm(&ops[0], pc, labels, 21, "jal")?;
                 Ok(Jal { rd, imm })
             } else if ops.len() == 2 {
                 Ok(Jal {
                     rd: get_reg(&ops[0])?,
-                    imm: branch_imm(&ops[1], pc, labels)?,
+                    imm: branch_imm(&ops[1], pc, labels, 21, "jal")?,
                 })
             } else {
                 Err("jal: too many arguments".into())
@@ -520,7 +516,7 @@ fn parse_instr(s: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<Instru
             Ok(Jalr {
                 rd: get_reg(&ops[0])?,
                 rs1: get_reg(&ops[1])?,
-                imm: get_imm(&ops[2])?,
+                imm: check_signed(get_imm(&ops[2])?, 12, "jalr")?,
             })
         }
 
@@ -562,6 +558,8 @@ fn parse_la(s: &str, labels: &HashMap<String, u32>) -> Result<(Instruction, Inst
     let hi = ((addr + 0x800) >> 12) << 12; // aligned high part
     let lo = addr - hi; // 12-bit low part
     let lo_signed = if lo & 0x800 != 0 { lo - 0x1000 } else { lo };
+    let hi = check_u_imm(hi, "la")?;
+    let lo_signed = check_signed(lo_signed, 12, "la")?;
 
     Ok((
         Instruction::Lui { rd, imm: hi },
@@ -707,17 +705,54 @@ fn parse_shamt(s: &str) -> Result<u8, String> {
     }
 }
 
-// beq/bne/... and jal: token can be a number or label
-fn branch_imm(tok: &str, pc: u32, labels: &HashMap<String, u32>) -> Result<i32, String> {
-    if let Some(v) = parse_imm(tok) {
-        return Ok(v);
+fn check_signed(imm: i32, bits: u32, ctx: &str) -> Result<i32, String> {
+    let max = (1i32 << (bits - 1)) - 1;
+    let min = -(1i32 << (bits - 1));
+    if imm < min || imm > max {
+        Err(format!(
+            "{ctx}: immediate {imm} out of {bits}-bit signed range ({min}..{max})"
+        ))
+    } else {
+        Ok(imm)
     }
-    let target = labels
-        .get(&tok.to_string())
-        .ok_or_else(|| format!("label not found: {tok}"))?;
-    let imm = (*target as i64) - (pc as i64);
-    // basic range check (13 bits for B, 21 bits for J). Here we only warn.
-    Ok(imm as i32)
+}
+
+fn check_u_imm(imm: i32, ctx: &str) -> Result<i32, String> {
+    if imm & 0xfff != 0 {
+        return Err(format!("{ctx}: immediate {imm} has non-zero lower 12 bits"));
+    }
+    let imm64 = imm as i64;
+    let min = -(1i64 << 31);
+    let max = (1i64 << 31) - (1i64 << 12);
+    if imm64 < min || imm64 > max {
+        Err(format!(
+            "{ctx}: immediate {imm} out of 20-bit signed range ({min}..{max})"
+        ))
+    } else {
+        Ok(imm)
+    }
+}
+
+// beq/bne/... and jal: token can be a number or label
+fn branch_imm(
+    tok: &str,
+    pc: u32,
+    labels: &HashMap<String, u32>,
+    bits: u32,
+    ctx: &str,
+) -> Result<i32, String> {
+    let imm = if let Some(v) = parse_imm(tok) {
+        v
+    } else {
+        let target = labels
+            .get(&tok.to_string())
+            .ok_or_else(|| format!("label not found: {tok}"))?;
+        (*target as i64 - pc as i64) as i32
+    };
+    if imm % 2 != 0 {
+        return Err(format!("{ctx}: offset {imm} must be even"));
+    }
+    check_signed(imm, bits, ctx)
 }
 
 // lw rd, imm(rs1)   |  sw rs2, imm(rs1)
@@ -832,5 +867,19 @@ mod tests {
         .expect("encode addi");
         assert_eq!(prog.text[0], expected_lw);
         assert_eq!(prog.text[1], expected_addi);
+    }
+
+    #[test]
+    fn addi_immediate_range_error() {
+        let asm = ".text\naddi x1, x0, 4096";
+        let err = assemble(asm, 0).err().expect("expected error");
+        assert!(err.msg.contains("12-bit"));
+    }
+
+    #[test]
+    fn beq_offset_range_error() {
+        let asm = ".text\nbeq x0, x0, 8192";
+        let err = assemble(asm, 0).err().expect("expected error");
+        assert!(err.msg.contains("13-bit"));
     }
 }
