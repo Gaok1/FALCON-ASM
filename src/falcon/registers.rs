@@ -3,6 +3,10 @@
 pub struct Cpu {
     pub x: [u32; 32],   // x0..x31 (x0 sempre 0)
     pub pc: u32,
+    /// buffer emulado de entrada (STDIN)
+    pub stdin: Vec<u8>,
+    /// buffer emulado de saída (STDOUT)
+    pub stdout: Vec<u8>,
 }
 
 impl Cpu {
