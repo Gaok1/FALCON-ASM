@@ -1,5 +1,5 @@
 use crate::ui::{
-    app::{App, EditorMode, MemRegion, RunButton, Tab},
+    app::{App, EditorMode, FormatMode, MemRegion, RunButton, Tab},
     editor::Editor,
 };
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -149,6 +149,7 @@ pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
             MouseEventKind::Down(MouseButton::Left) => {
                 handle_run_status_click(app, me, area);
                 start_imem_drag(app, me, area);
+                handle_console_clear(app, me, area);
                 start_console_drag(app, me, area);
             }
             MouseEventKind::Drag(MouseButton::Left) => {
@@ -179,7 +180,11 @@ fn handle_run_status_click(app: &mut App, me: MouseEvent, area: Rect) {
                 app.show_registers = !app.show_registers;
             }
             RunButton::Format => {
-                app.show_hex = !app.show_hex;
+                app.fmt_mode = match app.fmt_mode {
+                    FormatMode::Hex => FormatMode::Dec,
+                    FormatMode::Dec => FormatMode::Str,
+                    FormatMode::Str => FormatMode::Hex,
+                };
             }
             RunButton::Sign => {
                 app.show_signed = !app.show_signed;
@@ -246,7 +251,11 @@ fn run_status_area(app: &App, area: Rect) -> Rect {
 
 fn run_status_hit(app: &App, status: Rect, col: u16) -> Option<RunButton> {
     let view_text = if app.show_registers { "REGS" } else { "RAM" };
-    let fmt_text = if app.show_hex { "HEX" } else { "DEC" };
+    let fmt_text = match app.fmt_mode {
+        FormatMode::Hex => "HEX",
+        FormatMode::Dec => "DEC",
+        FormatMode::Str => "STR",
+    };
     let sign_text = if app.show_signed { "SGN" } else { "UNS" };
     let bytes_text = match app.mem_view_bytes {
         4 => "4B",
@@ -420,10 +429,22 @@ fn update_console_hover(app: &mut App, me: MouseEvent, area: Rect) {
         .split(run_area);
     let console = run_chunks[3];
     let bar_y = console.y;
-    if me.row == bar_y && me.column >= console.x && me.column < console.x + console.width {
-        app.hover_console_bar = true;
+    let clear_start = console.x + console.width.saturating_sub(6);
+    let clear_end = clear_start + 5;
+    if me.row == bar_y {
+        if me.column >= clear_start && me.column < clear_end {
+            app.hover_console_clear = true;
+            app.hover_console_bar = false;
+        } else if me.column >= console.x && me.column < console.x + console.width {
+            app.hover_console_bar = true;
+            app.hover_console_clear = false;
+        } else if !app.console_drag {
+            app.hover_console_bar = false;
+            app.hover_console_clear = false;
+        }
     } else if !app.console_drag {
         app.hover_console_bar = false;
+        app.hover_console_clear = false;
     }
 }
 
@@ -448,10 +469,44 @@ fn start_console_drag(app: &mut App, me: MouseEvent, area: Rect) {
         .split(run_area);
     let console = run_chunks[3];
     let bar_y = console.y;
-    if me.row == bar_y && me.column >= console.x && me.column < console.x + console.width {
+    let clear_start = console.x + console.width.saturating_sub(6);
+    let clear_end = clear_start + 5;
+    if me.row == bar_y
+        && me.column >= console.x
+        && me.column < console.x + console.width
+        && !(me.column >= clear_start && me.column < clear_end)
+    {
         app.console_drag = true;
         app.console_drag_start_y = me.row;
         app.console_height_start = app.console_height;
+    }
+}
+
+fn handle_console_clear(app: &mut App, me: MouseEvent, area: Rect) {
+    let root_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(1),
+        ])
+        .split(area);
+    let run_area = root_chunks[1];
+    let run_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+            Constraint::Length(app.console_height),
+        ])
+        .split(run_area);
+    let console = run_chunks[3];
+    let bar_y = console.y;
+    let clear_start = console.x + console.width.saturating_sub(6);
+    let clear_end = clear_start + 5;
+    if me.row == bar_y && me.column >= clear_start && me.column < clear_end {
+        app.console.clear();
     }
 }
 

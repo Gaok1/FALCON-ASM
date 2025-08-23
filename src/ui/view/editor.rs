@@ -28,7 +28,7 @@ pub(super) fn render_editor_status(f: &mut Frame, area: Rect, app: &App) {
     let build = Line::from(vec![Span::raw("Build: "), compile_span]);
 
     let commands = Line::from(
-        "Commands: Esc=Command  |  i=Insert  |  Ctrl+R=Assemble  |  Ctrl+O=Import  |  Ctrl+S=Export",
+        "Commands: Esc=Command  |  Ctrl+R=Assemble  |  Ctrl+O=Import  |  Ctrl+S=Export",
     );
 
     let para = Paragraph::new(vec![mode, build, commands]).block(

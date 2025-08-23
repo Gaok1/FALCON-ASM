@@ -47,10 +47,12 @@ Jumps:
   JAL (0x6F), JALR (0x67)
 
 System:
-  ECALL (0x00000073), EBREAK (0x00100073)
+  ECALL (0x00000073), HALT (0x00100073)
 
 Notes:
 • PC advances +4 each instruction. Branch/JAL immediates are byte offsets (must be even).
 • Loads/Stores syntax: imm(rs1). Labels supported by 2-pass assembler.
 • Pseudoinstructions: nop, mv, li(12-bit), j, call, jr, ret, subi, la, push, pop, print, printString, read.
+• Syscalls: `print rd` prints the value of `rd`, `printString label|rd` prints a NUL-terminated string,
+  `read` reads a line into the address in `a0`. Use `halt` to stop execution.
 "#;

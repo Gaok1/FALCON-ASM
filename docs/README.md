@@ -22,7 +22,7 @@ Implements the essential subset of **RV32I**:
 - **Branches:** `BEQ, BNE, BLT, BGE, BLTU, BGEU`
 - **U/J:** `LUI, AUIPC, JAL`
 - **JALR`
-- **SYSTEM:** `ECALL`, `EBREAK` (treated as HALT)
+- **SYSTEM:** `ECALL`, `HALT`
 
 *Not implemented:* FENCE/CSR and floating point.
 
@@ -115,7 +115,7 @@ load_words(&mut mem, cpu.pc, &prog.text);
 load_bytes(&mut mem, prog.data_base, &prog.data);
 ```
 
-The emulator executes instructions while `step` returns `true`.
+The emulator executes instructions while `step` returns `true`; encountering `halt` or an unknown syscall stops execution.
 
 # Examples
 ## Code editor

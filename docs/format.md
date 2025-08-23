@@ -18,7 +18,7 @@ Supports the essential subset of **RV32I**:
 - **Branches:** `BEQ, BNE, BLT, BGE, BLTU, BGEU`
 - **U/J:** `LUI, AUIPC, JAL`
 - **JALR**
-- **SYSTEM:** `ECALL`, `EBREAK` (interpreted as HALT)
+- **SYSTEM:** `ECALL`, `HALT`
 
 *Not implemented:* FENCE/CSR instructions and floating point.
 
@@ -170,7 +170,7 @@ Other formats (I, S, B, U, J) rearrange fields and immediates.
 
 ### SYSTEM (opcode 0x73)
 
-- `ECALL` (`0x00000073`) and `EBREAK` (`0x00100073`) halt execution.
+- `ECALL` (`0x00000073`) and `HALT` (`0x00100073`) halt execution.
 
 ## Assembler Rules
 
@@ -202,6 +202,7 @@ Other formats (I, S, B, U, J) rearrange fields and immediates.
   - `la rd, label` → emits `lui`/`addi` to load a data address
   - `push rs` → `addi sp, sp, -4` ; `sw rs, 0(sp)`
   - `pop rd` → `lw rd, 0(sp)` ; `addi sp, sp, 4`
+  - `halt` → `0x00100073` (stops execution)
   - `print rd` → `a7=1, a0=rd, ecall`
   - `printString label|rd` → `a7=2, a0=addr, ecall`
   - `read` → `a7=3, a0=dest, ecall`
