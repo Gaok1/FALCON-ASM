@@ -181,8 +181,14 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
         Instruction::Auipc { rd, imm } => cpu.write(rd, pc.wrapping_add(imm as u32)),
 
         Instruction::Ecall => {
+            let old_pc = pc;
             let code = cpu.read(17);
-            return handle_syscall(code, cpu, mem, console);
+            let cont = handle_syscall(code, cpu, mem, console);
+            if !cont && console.reading {
+                cpu.pc = old_pc;
+                return false;
+            }
+            return cont;
         }
         Instruction::Ebreak => {
             console.push_error(format!("EBREAK at 0x{pc:08X}"));
@@ -254,7 +260,7 @@ mod tests {
         cpu.write(17, 1);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"42");
     }
 
@@ -272,26 +278,52 @@ mod tests {
         cpu.write(17, 2);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"hi");
     }
 
-   #[test]
-fn syscall_read_string() {
-    let mut cpu = Cpu::default();
-    let mut mem = Ram::new(64);
-    let mut console = crate::ui::Console::default();
-    console.push_input("hi");
-    let addr = 8u32;
-    cpu.write(10, addr);
-    cpu.write(17, 3);
-    let inst = encoder::encode(Instruction::Ecall).unwrap();
-    mem.store32(0, inst);
+    #[test]
+    fn syscall_read_string() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(64);
+        let mut console = crate::ui::Console::default();
+        console.push_input("hi");
+        let addr = 8u32;
+        cpu.write(10, addr);
+        cpu.write(17, 3);
+        let inst = encoder::encode(Instruction::Ecall).unwrap();
+        mem.store32(0, inst);
 
-    assert!(step(&mut cpu, &mut mem, &mut console));
-    assert_eq!(mem.load8(addr), b'h');
-    assert_eq!(mem.load8(addr + 1), b'i');
-    assert_eq!(mem.load8(addr + 2), 0);
-}
+        assert!(step(&mut cpu, &mut mem, &mut console));
+        assert_eq!(mem.load8(addr), b'h');
+        assert_eq!(mem.load8(addr + 1), b'i');
+        assert_eq!(mem.load8(addr + 2), 0);
+    }
+
+    #[test]
+    fn syscall_read_waits_for_input() {
+        let mut cpu = Cpu::default();
+        let mut mem = Ram::new(64);
+        let mut console = crate::ui::Console::default();
+        let addr = 8u32;
+        cpu.write(10, addr);
+        cpu.write(17, 3);
+        let ecall = encoder::encode(Instruction::Ecall).unwrap();
+        let ebreak = encoder::encode(Instruction::Ebreak).unwrap();
+        mem.store32(0, ecall);
+        mem.store32(4, ebreak);
+
+        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert_eq!(cpu.pc, 0);
+
+        console.push_input("hi");
+        assert!(step(&mut cpu, &mut mem, &mut console));
+        assert_eq!(cpu.pc, 4);
+        assert_eq!(mem.load8(addr), b'h');
+        assert_eq!(mem.load8(addr + 1), b'i');
+        assert_eq!(mem.load8(addr + 2), 0);
+
+        assert!(!step(&mut cpu, &mut mem, &mut console));
+    }
 
 }
