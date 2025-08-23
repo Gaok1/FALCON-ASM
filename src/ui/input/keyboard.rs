@@ -20,9 +20,6 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                 let line = std::mem::take(&mut app.console.current);
                 app.console.push_input(line);
                 app.console.reading = false;
-                // Resume execution after providing input
-                app.is_running = true;
-                app.single_step();
             }
             _ => {}
         }
@@ -259,7 +256,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
 
                 // Run controls
                 (KeyCode::Char('s'), Tab::Run) => {
-                    app.single_step();
+                    if !app.faulted {
+                        app.single_step();
+                    }
                 }
                 (KeyCode::Char('r'), Tab::Run) => {
                     if !app.faulted {
