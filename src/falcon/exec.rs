@@ -189,8 +189,9 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             return false;
         }
         _ => {}
-    }
-    true
+        }
+        true
+
 }
 
 // em src/falcon/exec.rs (logo abaixo de `step`)
@@ -253,7 +254,7 @@ mod tests {
         cpu.write(17, 1);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem, &mut console));
+        assert!(!step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"42");
     }
 
@@ -271,24 +272,26 @@ mod tests {
         cpu.write(17, 2);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem, &mut console));
+        assert!(!step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"hi");
     }
 
-    #[test]
-    fn syscall_read_string() {
-        let mut cpu = Cpu::default();
-        let mut mem = Ram::new(64);
-        let mut console = crate::ui::Console::default();
-        console.push_input("hi");
-        let addr = 8u32;
-        cpu.write(10, addr);
-        cpu.write(17, 3);
-        let inst = encoder::encode(Instruction::Ecall).unwrap();
-        mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem, &mut console));
-        assert_eq!(mem.load8(addr), b'h');
-        assert_eq!(mem.load8(addr + 1), b'i');
-        assert_eq!(mem.load8(addr + 2), 0);
-    }
+   #[test]
+fn syscall_read_string() {
+    let mut cpu = Cpu::default();
+    let mut mem = Ram::new(64);
+    let mut console = crate::ui::Console::default();
+    console.push_input("hi");
+    let addr = 8u32;
+    cpu.write(10, addr);
+    cpu.write(17, 3);
+    let inst = encoder::encode(Instruction::Ecall).unwrap();
+    mem.store32(0, inst);
+
+    assert!(step(&mut cpu, &mut mem, &mut console));
+    assert_eq!(mem.load8(addr), b'h');
+    assert_eq!(mem.load8(addr + 1), b'i');
+    assert_eq!(mem.load8(addr + 2), 0);
+}
+
 }

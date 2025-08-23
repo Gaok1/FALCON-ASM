@@ -261,12 +261,13 @@ impl App {
                 false
             }
         };
-        if !alive {
-            self.is_running = false;
-            if !self.console.reading {
-                self.faulted = true;
-            }
-        }
+       if !alive {
+    self.is_running = false;
+    if !self.console.reading {
+        self.faulted = true;
+    }
+}
+
     }
 }
 
