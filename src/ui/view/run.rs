@@ -136,11 +136,11 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
             if addr <= max {
                 let val_str = match (bytes, app.fmt_mode) {
                     (4, FormatMode::Hex) => {
-                        let w = app.mem.load32(addr);
+                        let w = app.mem.load32(addr).unwrap_or(0);
                         format!("0x{w:08x}")
                     }
                     (4, FormatMode::Dec) => {
-                        let w = app.mem.load32(addr);
+                        let w = app.mem.load32(addr).unwrap_or(0);
                         if app.show_signed {
                             format!("{}", w as i32)
                         } else {
@@ -148,15 +148,15 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                         }
                     }
                     (4, FormatMode::Str) => {
-                        let w = app.mem.load32(addr);
+                        let w = app.mem.load32(addr).unwrap_or(0);
                         ascii_bytes(&w.to_le_bytes())
                     }
                     (2, FormatMode::Hex) => {
-                        let w = app.mem.load16(addr);
+                        let w = app.mem.load16(addr).unwrap_or(0);
                         format!("0x{w:04x}")
                     }
                     (2, FormatMode::Dec) => {
-                        let w = app.mem.load16(addr);
+                        let w = app.mem.load16(addr).unwrap_or(0);
                         if app.show_signed {
                             format!("{}", (w as i16))
                         } else {
@@ -164,15 +164,15 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                         }
                     }
                     (2, FormatMode::Str) => {
-                        let w = app.mem.load16(addr);
+                        let w = app.mem.load16(addr).unwrap_or(0);
                         ascii_bytes(&w.to_le_bytes())
                     }
                     (_, FormatMode::Hex) => {
-                        let w = app.mem.load8(addr);
+                        let w = app.mem.load8(addr).unwrap_or(0);
                         format!("0x{w:02x}")
                     }
                     (_, FormatMode::Dec) => {
-                        let w = app.mem.load8(addr);
+                        let w = app.mem.load8(addr).unwrap_or(0);
                         if app.show_signed {
                             format!("{}", (w as i8))
                         } else {
@@ -180,7 +180,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
                         }
                     }
                     (_, FormatMode::Str) => {
-                        let w = app.mem.load8(addr);
+                        let w = app.mem.load8(addr).unwrap_or(0);
                         ascii_bytes(&[w])
                     }
                 };
@@ -216,7 +216,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
     for off in (0..lines).map(|i| i * 4) {
         let addr = base.wrapping_add(off);
         if in_mem_range(app, addr) {
-            let w = app.mem.load32(addr);
+            let w = app.mem.load32(addr).unwrap_or(0);
             let marker = if addr == app.cpu.pc { "▶" } else { " " };
             let val_str = match app.fmt_mode {
                 FormatMode::Hex => format!("0x{w:08x}"),
@@ -263,7 +263,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
         .split(cols[2]);
 
     let (cur_word, disasm_str) = if in_mem_range(app, app.cpu.pc) {
-        let w = app.mem.load32(app.cpu.pc);
+        let w = app.mem.load32(app.cpu.pc).unwrap_or(0);
         let dis = disasm_word(w);
         (w, dis)
     } else {

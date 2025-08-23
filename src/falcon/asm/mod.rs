@@ -80,13 +80,13 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
                 } else if ltrim.starts_with("pop ") {
                     items.push((pc_text, LineKind::Pop(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(8);
-                } else if ltrim.starts_with("print ") {
+                } else if ltrim == "print" || ltrim.starts_with("print ") {
                     items.push((pc_text, LineKind::Print(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(12);
-                } else if ltrim.starts_with("printString ") {
+                } else if ltrim == "printString" || ltrim.starts_with("printString ") {
                     items.push((pc_text, LineKind::PrintString(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(16);
-                } else if ltrim.starts_with("read ") {
+                } else if ltrim == "read" || ltrim.starts_with("read ") {
                     items.push((pc_text, LineKind::Read(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(16);
                 } else {
@@ -673,9 +673,9 @@ fn parse_print(s: &str) -> Result<Vec<Instruction>, String> {
     let rest = parts.collect::<Vec<_>>().join(" ");
     let ops = split_operands(&rest);
     if ops.len() != 1 {
-        return Err("expected 'rd'".into());
+        return Err("print: expected 'rd'".into());
     }
-    let rd = parse_reg(&ops[0]).ok_or("invalid rd")?;
+    let rd = parse_reg(&ops[0]).ok_or("print: invalid rd")?;
     Ok(vec![
         Instruction::Addi {
             rd: 17,
@@ -698,7 +698,7 @@ fn parse_print_string(s: &str, labels: &HashMap<String, u32>) -> Result<Vec<Inst
     let rest = parts.collect::<Vec<_>>().join(" ");
     let ops = split_operands(&rest);
     if ops.len() != 1 || parse_reg(&ops[0]).is_some() {
-        return Err("expected 'label'".into());
+        return Err("printString: expected 'label'".into());
     }
     let la_line = format!("la a0, {}", ops[0]);
     let (i1, i2) = parse_la(&la_line, labels)?;
@@ -721,7 +721,7 @@ fn parse_read(s: &str, labels: &HashMap<String, u32>) -> Result<Vec<Instruction>
     let rest = parts.collect::<Vec<_>>().join(" ");
     let ops = split_operands(&rest);
     if ops.len() != 1 || parse_reg(&ops[0]).is_some() {
-        return Err("expected 'label'".into());
+        return Err("read: expected 'label'".into());
     }
     let la_line = format!("la a0, {}", ops[0]);
     let (i1, i2) = parse_la(&la_line, labels)?;
@@ -1018,7 +1018,7 @@ mod tests {
     fn print_string_register_errors() {
         let asm = ".text\nprintString a1";
         let err = assemble(asm, 0).err().expect("expected error");
-        assert!(err.msg.contains("expected 'label'"));
+        assert!(err.msg.contains("printString: expected 'label'"));
     }
 
     #[test]

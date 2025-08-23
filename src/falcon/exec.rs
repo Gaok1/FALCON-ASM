@@ -1,19 +1,23 @@
 // falcon/exec.rs
-use crate::falcon::{instruction::Instruction, memory::Bus, registers::Cpu};
+use crate::falcon::{errors::FalconError, instruction::Instruction, memory::Bus, registers::Cpu};
 
 use crate::falcon::syscall::handle_syscall;
 use crate::ui::Console;
 
-pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
+pub fn step<B: Bus>(
+    cpu: &mut Cpu,
+    mem: &mut B,
+    console: &mut Console,
+) -> Result<bool, FalconError> {
     let pc = cpu.pc;
-    let word = mem.load32(pc);
+    let word = mem.load32(pc)?;
     let instr = match crate::falcon::decoder::decode(word) {
         Ok(i) => i,
-        Err(_) => {
+        Err(e) => {
             console.push_error(format!(
-                "Invalid instruction 0x{word:08X} at 0x{pc:08X}"
+                "Invalid instruction 0x{word:08X} at 0x{pc:08X}: {e}"
             ));
-            return false;
+            return Err(e);
         }
     };
     cpu.pc = pc.wrapping_add(4);
@@ -61,7 +65,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             let den = cpu.read(rs2) as i32;
             if den == 0 {
                 console.push_error("Division by zero");
-                return false;
+                return Ok(false);
             }
             let val = { num.wrapping_div(den) };
             cpu.write(rd, val as u32);
@@ -70,7 +74,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             let den = cpu.read(rs2);
             if den == 0 {
                 console.push_error("Division by zero");
-                return false;
+                return Ok(false);
             }
             let val = cpu.read(rs1).wrapping_div(den);
             cpu.write(rd, val);
@@ -80,7 +84,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             let den = cpu.read(rs2) as i32;
             if den == 0 {
                 console.push_error("Division by zero");
-                return false;
+                return Ok(false);
             }
             let val = num.wrapping_rem(den);
             cpu.write(rd, val as u32);
@@ -89,7 +93,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
             let den = cpu.read(rs2);
             if den == 0 {
                 console.push_error("Division by zero");
-                return false;
+                return Ok(false);
             }
             let val = cpu.read(rs1).wrapping_rem(den);
 
@@ -116,36 +120,36 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
 
         Instruction::Lb { rd, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            cpu.write(rd, (mem.load8(a) as i8 as i32) as u32);
+            cpu.write(rd, (mem.load8(a)? as i8 as i32) as u32);
         }
         Instruction::Lh { rd, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            cpu.write(rd, (mem.load16(a) as i16 as i32) as u32);
+            cpu.write(rd, (mem.load16(a)? as i16 as i32) as u32);
         }
         Instruction::Lw { rd, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            cpu.write(rd, mem.load32(a));
+            cpu.write(rd, mem.load32(a)?);
         }
         Instruction::Lbu { rd, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            cpu.write(rd, mem.load8(a) as u32);
+            cpu.write(rd, mem.load8(a)? as u32);
         }
         Instruction::Lhu { rd, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            cpu.write(rd, mem.load16(a) as u32);
+            cpu.write(rd, mem.load16(a)? as u32);
         }
 
         Instruction::Sb { rs2, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            mem.store8(a, cpu.read(rs2) as u8);
+            mem.store8(a, cpu.read(rs2) as u8)?;
         }
         Instruction::Sh { rs2, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            mem.store16(a, cpu.read(rs2) as u16);
+            mem.store16(a, cpu.read(rs2) as u16)?;
         }
         Instruction::Sw { rs2, rs1, imm } => {
             let a = cpu.read(rs1).wrapping_add(imm as u32);
-            mem.store32(a, cpu.read(rs2));
+            mem.store32(a, cpu.read(rs2))?;
         }
 
         // Branches (offset relative to the PC of the fetched instruction)
@@ -183,20 +187,20 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
         Instruction::Ecall => {
             let old_pc = pc;
             let code = cpu.read(17);
-            let cont = handle_syscall(code, cpu, mem, console);
+            let cont = handle_syscall(code, cpu, mem, console)?;
             if !cont && console.reading {
                 cpu.pc = old_pc;
-                return false;
+                return Ok(false);
             }
-            return cont;
+            return Ok(cont);
         }
         Instruction::Halt => {
             console.push_error(format!("HALT at 0x{pc:08X}"));
-            return false;
+            return Ok(false);
         }
         _ => {}
         }
-        true
+        Ok(true)
 
 }
 
@@ -206,12 +210,15 @@ pub fn run<B: crate::falcon::memory::Bus>(
     mem: &mut B,
     console: &mut Console,
     max_steps: usize,
-) -> usize {
+) -> Result<usize, FalconError> {
     let mut steps = 0;
-    while steps < max_steps && step(cpu, mem, console) {
-        steps += 1;
+    while steps < max_steps {
+        match step(cpu, mem, console)? {
+            true => steps += 1,
+            false => break,
+        }
     }
-    steps
+    Ok(steps)
 }
 
 #[cfg(test)]
@@ -226,8 +233,8 @@ mod tests {
         let mut mem = Ram::new(4);
         let mut console = crate::ui::Console::default();
         let inst = encoder::encode(Instruction::Halt).unwrap();
-        mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        mem.store32(0, inst).unwrap();
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
     }
 
     #[test]
@@ -244,11 +251,11 @@ mod tests {
         })
         .unwrap();
         let halt = encoder::encode(Instruction::Halt).unwrap();
-        mem.store32(0, sw);
-        mem.store32(4, halt);
-        assert!(step(&mut cpu, &mut mem, &mut console));
-        assert_eq!(mem.load32(0x20), 0xDEADBEEF);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        mem.store32(0, sw).unwrap();
+        mem.store32(4, halt).unwrap();
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
+        assert_eq!(mem.load32(0x20).unwrap(), 0xDEADBEEF);
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
     }
 
     #[test]
@@ -259,8 +266,8 @@ mod tests {
         cpu.write(10, 42);
         cpu.write(17, 1);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
-        mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem, &mut console));
+        mem.store32(0, inst).unwrap();
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
         assert_eq!(cpu.stdout, b"42");
     }
 
@@ -272,13 +279,13 @@ mod tests {
         let addr = 8u32;
         let msg = b"hi\0";
         for (i, b) in msg.iter().enumerate() {
-            mem.store8(addr + i as u32, *b);
+            mem.store8(addr + i as u32, *b).unwrap();
         }
         cpu.write(10, addr);
         cpu.write(17, 2);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
-        mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem, &mut console));
+        mem.store32(0, inst).unwrap();
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
         assert_eq!(cpu.stdout, b"hi");
     }
 
@@ -292,12 +299,12 @@ mod tests {
         cpu.write(10, addr);
         cpu.write(17, 3);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
-        mem.store32(0, inst);
+        mem.store32(0, inst).unwrap();
 
-        assert!(step(&mut cpu, &mut mem, &mut console));
-        assert_eq!(mem.load8(addr), b'h');
-        assert_eq!(mem.load8(addr + 1), b'i');
-        assert_eq!(mem.load8(addr + 2), 0);
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
+        assert_eq!(mem.load8(addr).unwrap(), b'h');
+        assert_eq!(mem.load8(addr + 1).unwrap(), b'i');
+        assert_eq!(mem.load8(addr + 2).unwrap(), 0);
     }
 
     #[test]
@@ -310,20 +317,20 @@ mod tests {
         cpu.write(17, 3);
         let ecall = encoder::encode(Instruction::Ecall).unwrap();
         let halt = encoder::encode(Instruction::Halt).unwrap();
-        mem.store32(0, ecall);
-        mem.store32(4, halt);
+        mem.store32(0, ecall).unwrap();
+        mem.store32(4, halt).unwrap();
 
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
         assert_eq!(cpu.pc, 0);
 
         console.push_input("hi");
-        assert!(step(&mut cpu, &mut mem, &mut console));
+        assert!(step(&mut cpu, &mut mem, &mut console).unwrap());
         assert_eq!(cpu.pc, 4);
-        assert_eq!(mem.load8(addr), b'h');
-        assert_eq!(mem.load8(addr + 1), b'i');
-        assert_eq!(mem.load8(addr + 2), 0);
+        assert_eq!(mem.load8(addr).unwrap(), b'h');
+        assert_eq!(mem.load8(addr + 1).unwrap(), b'i');
+        assert_eq!(mem.load8(addr + 2).unwrap(), 0);
 
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(!step(&mut cpu, &mut mem, &mut console).unwrap());
     }
 
 }
