@@ -85,17 +85,10 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
                     pc_text = pc_text.wrapping_add(12);
                 } else if ltrim.starts_with("printString ") {
                     items.push((pc_text, LineKind::PrintString(ltrim.to_string()), *line_no));
-                    let rest = ltrim.trim_start_matches("printString").trim();
-                    let ops = split_operands(rest);
-                    let inc = if ops.len() == 1 && parse_reg(&ops[0]).is_some() {
-                        12
-                    } else {
-                        16
-                    };
-                    pc_text = pc_text.wrapping_add(inc);
-                } else if ltrim == "read" {
+                    pc_text = pc_text.wrapping_add(16);
+                } else if ltrim.starts_with("read ") {
                     items.push((pc_text, LineKind::Read(ltrim.to_string()), *line_no));
-                    pc_text = pc_text.wrapping_add(8);
+                    pc_text = pc_text.wrapping_add(16);
                 } else {
                     items.push((pc_text, LineKind::Instr(ltrim.to_string()), *line_no));
                     pc_text = pc_text.wrapping_add(4);
@@ -288,7 +281,7 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
                 }
             }
             LineKind::Read(s) => {
-                let insts = parse_read(&s).map_err(|e| AsmError {
+                let insts = parse_read(&s, &labels).map_err(|e| AsmError {
                     line: line_no,
                     msg: e,
                 })?;
@@ -699,57 +692,47 @@ fn parse_print(s: &str) -> Result<Vec<Instruction>, String> {
 }
 
 fn parse_print_string(s: &str, labels: &HashMap<String, u32>) -> Result<Vec<Instruction>, String> {
-    // "printString label|rd"
+    // "printString label"
     let mut parts = s.split_whitespace();
     parts.next();
     let rest = parts.collect::<Vec<_>>().join(" ");
     let ops = split_operands(&rest);
-    if ops.len() != 1 {
-        return Err("expected 'label|rd'".into());
+    if ops.len() != 1 || parse_reg(&ops[0]).is_some() {
+        return Err("expected 'label'".into());
     }
-    if let Some(rd) = parse_reg(&ops[0]) {
-        Ok(vec![
-            Instruction::Addi {
-                rd: 17,
-                rs1: 0,
-                imm: 2,
-            },
-            Instruction::Addi {
-                rd: 10,
-                rs1: rd,
-                imm: 0,
-            },
-            Instruction::Ecall,
-        ])
-    } else {
-        let la_line = format!("la a0, {}", ops[0]);
-        let (i1, i2) = parse_la(&la_line, labels)?;
-        Ok(vec![
-            Instruction::Addi {
-                rd: 17,
-                rs1: 0,
-                imm: 2,
-            },
-            i1,
-            i2,
-            Instruction::Ecall,
-        ])
-    }
+    let la_line = format!("la a0, {}", ops[0]);
+    let (i1, i2) = parse_la(&la_line, labels)?;
+    Ok(vec![
+        Instruction::Addi {
+            rd: 17,
+            rs1: 0,
+            imm: 2,
+        },
+        i1,
+        i2,
+        Instruction::Ecall,
+    ])
 }
 
-fn parse_read(s: &str) -> Result<Vec<Instruction>, String> {
-    // "read" (data written to memory pointed by a0)
+fn parse_read(s: &str, labels: &HashMap<String, u32>) -> Result<Vec<Instruction>, String> {
+    // "read label" (data written to memory pointed by label)
     let mut parts = s.split_whitespace();
-    parts.next(); // consume mnemonic
-    if parts.next().is_some() {
-        return Err("read takes no operands".into());
+    parts.next();
+    let rest = parts.collect::<Vec<_>>().join(" ");
+    let ops = split_operands(&rest);
+    if ops.len() != 1 || parse_reg(&ops[0]).is_some() {
+        return Err("expected 'label'".into());
     }
+    let la_line = format!("la a0, {}", ops[0]);
+    let (i1, i2) = parse_la(&la_line, labels)?;
     Ok(vec![
         Instruction::Addi {
             rd: 17,
             rs1: 0,
             imm: 3,
         },
+        i1,
+        i2,
         Instruction::Ecall,
     ])
 }
@@ -1032,26 +1015,10 @@ mod tests {
     }
 
     #[test]
-    fn print_string_register_expands_correctly() {
+    fn print_string_register_errors() {
         let asm = ".text\nprintString a1";
-        let prog = assemble(asm, 0).expect("assemble");
-        assert_eq!(prog.text.len(), 3);
-        let expected_li = encode(Instruction::Addi {
-            rd: 17,
-            rs1: 0,
-            imm: 2,
-        })
-        .expect("encode addi");
-        let expected_mv = encode(Instruction::Addi {
-            rd: 10,
-            rs1: 11,
-            imm: 0,
-        })
-        .expect("encode addi");
-        let expected_ecall = encode(Instruction::Ecall).expect("encode ecall");
-        assert_eq!(prog.text[0], expected_li);
-        assert_eq!(prog.text[1], expected_mv);
-        assert_eq!(prog.text[2], expected_ecall);
+        let err = assemble(asm, 0).err().expect("expected error");
+        assert!(err.msg.contains("expected 'label'"));
     }
 
     #[test]
@@ -1084,19 +1051,32 @@ mod tests {
     }
 
     #[test]
-    fn read_expands_correctly() {
-        let asm = ".text\nread";
+    fn read_label_expands_correctly() {
+        let asm = ".data\nbuf: .space 4\n.text\nread buf";
         let prog = assemble(asm, 0).expect("assemble");
-        assert_eq!(prog.text.len(), 2);
+        assert_eq!(prog.text.len(), 4);
         let expected_li = encode(Instruction::Addi {
             rd: 17,
             rs1: 0,
             imm: 3,
         })
         .expect("encode addi");
+        let expected_lui = encode(Instruction::Lui {
+            rd: 10,
+            imm: 0x1000,
+        })
+        .expect("encode lui");
+        let expected_addi = encode(Instruction::Addi {
+            rd: 10,
+            rs1: 10,
+            imm: 0,
+        })
+        .expect("encode addi");
         let expected_ecall = encode(Instruction::Ecall).expect("encode ecall");
         assert_eq!(prog.text[0], expected_li);
-        assert_eq!(prog.text[1], expected_ecall);
+        assert_eq!(prog.text[1], expected_lui);
+        assert_eq!(prog.text[2], expected_addi);
+        assert_eq!(prog.text[3], expected_ecall);
     }
 
     #[test]
