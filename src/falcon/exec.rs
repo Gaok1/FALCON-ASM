@@ -173,8 +173,9 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
 
         Instruction::Ecall => {
             let code = cpu.read(17);
-            let _ = handle_syscall(code, cpu, mem, console);
-            return false;
+            if !handle_syscall(code, cpu, mem, console) {
+                return false;
+            }
         }
         Instruction::Ebreak => return false, // HALT
         _ => {}
@@ -200,7 +201,7 @@ pub fn run<B: crate::falcon::memory::Bus>(
 mod tests {
     use super::*;
     use crate::falcon::encoder;
-    use crate::falcon::{Ram, instruction::Instruction};
+    use crate::falcon::{instruction::Instruction, Ram};
 
     #[test]
     fn ebreak_halts() {
@@ -242,7 +243,7 @@ mod tests {
         cpu.write(17, 1);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"42");
     }
 
@@ -260,7 +261,7 @@ mod tests {
         cpu.write(17, 2);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"hi");
     }
 
@@ -273,7 +274,7 @@ mod tests {
         cpu.write(17, 3);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem, &mut console));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.read(10), 123);
     }
 }
