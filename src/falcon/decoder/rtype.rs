@@ -1,7 +1,7 @@
-use crate::falcon::instruction::Instruction;
-use super::{bits};
+use crate::falcon::{instruction::Instruction, errors::FalconError};
+use super::bits;
 
-pub(super) fn decode(word:u32)->Result<Instruction,&'static str>{
+pub(super) fn decode(word:u32)->Result<Instruction,FalconError>{
     let rd  = bits(word, 11, 7) as u8;
     let funct3 = bits(word, 14, 12) as u8;
     let rs1 = bits(word, 19, 15) as u8;
@@ -27,6 +27,6 @@ pub(super) fn decode(word:u32)->Result<Instruction,&'static str>{
         (0x01, 0x5) => Instruction::Divu{rd,rs1,rs2},
         (0x01, 0x6) => Instruction::Rem{rd,rs1,rs2},
         (0x01, 0x7) => Instruction::Remu{rd,rs1,rs2},
-        _ => return Err("Invalid R-type"),
+        _ => return Err(FalconError::Decode("Invalid R-type")),
     })
 }

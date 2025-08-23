@@ -1,7 +1,7 @@
-use crate::falcon::instruction::Instruction;
+use crate::falcon::{instruction::Instruction, errors::FalconError};
 use super::{bits, sext};
 
-pub(super) fn decode_jal(word:u32)->Result<Instruction,&'static str>{
+pub(super) fn decode_jal(word:u32)->Result<Instruction,FalconError>{
     let rd  = bits(word, 11, 7) as u8;
     // J-imm: [20|10:1|11|19:12] << 1
     let imm_bits =

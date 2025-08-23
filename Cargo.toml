@@ -8,6 +8,7 @@ ratatui = { version = "0.28", features = ["all-widgets"] }
 crossterm = "0.29"
 rfd = "0.15"
 arboard = "3"
+thiserror = "1"
 
 [profile.release]
 opt-level = 3        # máxima otimização de código

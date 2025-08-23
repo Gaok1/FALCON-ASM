@@ -4,7 +4,7 @@ mod stype;
 mod btype;
 mod jtype;
 
-use crate::falcon::instruction::Instruction;
+use crate::falcon::{instruction::Instruction, errors::FalconError};
 use crate::falcon::arch::*;
 
 #[inline] fn bits(v:u32, hi:u8, lo:u8)->u32 { (v >> lo) & ((1u32 << (hi-lo+1)) - 1) }
@@ -13,7 +13,7 @@ use crate::falcon::arch::*;
     ((v << shift) as i32) >> shift
 }
 
-pub fn decode(word: u32) -> Result<Instruction, &'static str> {
+pub fn decode(word: u32) -> Result<Instruction, FalconError> {
     let opcode = bits(word, 6, 0) as u8;
     match opcode {
         OPC_RTYPE  => rtype::decode(word),
@@ -26,7 +26,7 @@ pub fn decode(word: u32) -> Result<Instruction, &'static str> {
         OPC_LUI    => itype::decode_lui(word),
         OPC_AUIPC  => itype::decode_auipc(word),
         OPC_SYSTEM => itype::decode_system(word),
-        _ => Err("unknown opcode"),
+        _ => Err(FalconError::Decode("unknown opcode")),
     }
 }
 

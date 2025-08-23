@@ -189,8 +189,16 @@ impl App {
 
         match assemble(&self.editor.text(), self.base_pc) {
             Ok(prog) => {
-                load_words(&mut self.mem, self.base_pc, &prog.text);
-                load_bytes(&mut self.mem, prog.data_base, &prog.data);
+                if let Err(e) = load_words(&mut self.mem, self.base_pc, &prog.text) {
+                    self.console.push_error(e.to_string());
+                    self.faulted = true;
+                    return;
+                }
+                if let Err(e) = load_bytes(&mut self.mem, prog.data_base, &prog.data) {
+                    self.console.push_error(e.to_string());
+                    self.faulted = true;
+                    return;
+                }
 
                 self.data_base = prog.data_base;
                 self.mem_view_addr = prog.data_base;
@@ -264,18 +272,23 @@ impl App {
             falcon::exec::step(&mut self.cpu, &mut self.mem, &mut self.console)
         }));
         let alive = match res {
-            Ok(v) => v,
+            Ok(Ok(v)) => v,
+            Ok(Err(e)) => {
+                self.console.push_error(e.to_string());
+                self.faulted = true;
+                false
+            }
             Err(_) => {
                 self.faulted = true;
                 false
             }
         };
-       if !alive {
-    self.is_running = false;
-    if !self.console.reading {
-        self.faulted = true;
-    }
-}
+        if !alive {
+            self.is_running = false;
+            if !self.console.reading {
+                self.faulted = true;
+            }
+        }
 
     }
 }
