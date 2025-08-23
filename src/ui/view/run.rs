@@ -12,7 +12,7 @@ pub(super) fn render_run(f: &mut Frame, area: Rect, app: &App) {
             Constraint::Length(3),
             Constraint::Length(4),
             Constraint::Min(0),
-            Constraint::Length(5),
+            Constraint::Length(app.console_height),
         ])
         .split(area);
 
@@ -615,13 +615,25 @@ fn render_field_values(f: &mut Frame, area: Rect, w: u32, fmt: EncFormat) {
 }
 
 fn render_console(f: &mut Frame, area: Rect, app: &App) {
+    if area.height <= 1 {
+        let arrow_style = if app.hover_console_bar {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+        let arrow = Paragraph::new("▲").style(arrow_style);
+        f.render_widget(arrow, area);
+        return;
+    }
+
     let block = Block::default()
         .borders(Borders::ALL)
         .title("Console — Ctrl+Up/Down scroll");
     let inner = block.inner(area);
     let h = inner.height.saturating_sub(1) as usize;
     let total = app.console.lines.len();
-    let scroll = app.console.scroll;
+    let max_scroll = total.saturating_sub(h);
+    let scroll = app.console.scroll.min(max_scroll);
     let start = total.saturating_sub(h + scroll);
     let end = total.saturating_sub(scroll);
     let mut lines: Vec<Line> = app.console.lines[start..end]
@@ -633,6 +645,17 @@ fn render_console(f: &mut Frame, area: Rect, app: &App) {
     }
     let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
     f.render_widget(para, area);
+
+    let arrow_style = if app.hover_console_bar {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let arrow_x = area.x + area.width / 2;
+    let arrow_y = area.y;
+    let arrow_area = Rect::new(arrow_x, arrow_y, 1, 1);
+    let arrow = Paragraph::new("▲").style(arrow_style);
+    f.render_widget(arrow, arrow_area);
 }
 
 fn disasm_word(w: u32) -> String {
