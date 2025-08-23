@@ -20,6 +20,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                 let line = std::mem::take(&mut app.console.current);
                 app.console.push_input(line);
                 app.console.reading = false;
+                // Resume CPU execution after providing input
+                app.is_running = true;
             }
             _ => {}
         }
