@@ -2,8 +2,9 @@
 use crate::falcon::{instruction::Instruction, memory::Bus, registers::Cpu};
 
 use crate::falcon::syscall::handle_syscall;
+use crate::ui::Console;
 
-pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B) -> bool {
+pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B, console: &mut Console) -> bool {
     let pc = cpu.pc;
     let word = mem.load32(pc);
     let instr = match crate::falcon::decoder::decode(word) {
@@ -172,7 +173,7 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B) -> bool {
 
         Instruction::Ecall => {
             let code = cpu.read(17);
-            if !handle_syscall(code, cpu, mem) {
+            if !handle_syscall(code, cpu, mem, console) {
                 return false;
             }
         }
@@ -186,10 +187,11 @@ pub fn step<B: Bus>(cpu: &mut Cpu, mem: &mut B) -> bool {
 pub fn run<B: crate::falcon::memory::Bus>(
     cpu: &mut crate::falcon::registers::Cpu,
     mem: &mut B,
+    console: &mut Console,
     max_steps: usize,
 ) -> usize {
     let mut steps = 0;
-    while steps < max_steps && step(cpu, mem) {
+    while steps < max_steps && step(cpu, mem, console) {
         steps += 1;
     }
     steps
@@ -205,15 +207,17 @@ mod tests {
     fn ebreak_halts() {
         let mut cpu = Cpu::default();
         let mut mem = Ram::new(4);
+        let mut console = crate::ui::Console::default();
         let inst = encoder::encode(Instruction::Ebreak).unwrap();
         mem.store32(0, inst);
-        assert!(!step(&mut cpu, &mut mem));
+        assert!(!step(&mut cpu, &mut mem, &mut console));
     }
 
     #[test]
     fn sw_stores_word() {
         let mut cpu = Cpu::default();
         let mut mem = Ram::new(64);
+        let mut console = crate::ui::Console::default();
         cpu.write(1, 0xDEADBEEF); // value to be stored
         cpu.write(2, 0x20); // base address
         let sw = encoder::encode(Instruction::Sw {
@@ -225,20 +229,21 @@ mod tests {
         let ebreak = encoder::encode(Instruction::Ebreak).unwrap();
         mem.store32(0, sw);
         mem.store32(4, ebreak);
-        assert!(step(&mut cpu, &mut mem));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(mem.load32(0x20), 0xDEADBEEF);
-        assert!(!step(&mut cpu, &mut mem));
+        assert!(!step(&mut cpu, &mut mem, &mut console));
     }
 
     #[test]
     fn syscall_print_int() {
         let mut cpu = Cpu::default();
         let mut mem = Ram::new(4);
+        let mut console = crate::ui::Console::default();
         cpu.write(10, 42);
         cpu.write(17, 1);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"42");
     }
 
@@ -246,6 +251,7 @@ mod tests {
     fn syscall_print_string() {
         let mut cpu = Cpu::default();
         let mut mem = Ram::new(64);
+        let mut console = crate::ui::Console::default();
         let addr = 8u32;
         let msg = b"hi\0";
         for (i, b) in msg.iter().enumerate() {
@@ -255,19 +261,20 @@ mod tests {
         cpu.write(17, 2);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.stdout, b"hi");
     }
 
     #[test]
     fn syscall_read_int() {
         let mut cpu = Cpu::default();
-        cpu.stdin = b"123".to_vec();
         let mut mem = Ram::new(4);
+        let mut console = crate::ui::Console::default();
+        console.push_input("123");
         cpu.write(17, 3);
         let inst = encoder::encode(Instruction::Ecall).unwrap();
         mem.store32(0, inst);
-        assert!(step(&mut cpu, &mut mem));
+        assert!(step(&mut cpu, &mut mem, &mut console));
         assert_eq!(cpu.read(10), 123);
     }
 }

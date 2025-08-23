@@ -9,6 +9,26 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
         return Ok(false);
     }
 
+    // When waiting for console input, capture characters regardless of mode/tab
+    if app.console.reading {
+        match key.code {
+            KeyCode::Char(c) => app.console.current.push(c),
+            KeyCode::Backspace => {
+                app.console.current.pop();
+            }
+            KeyCode::Enter => {
+                let line = std::mem::take(&mut app.console.current);
+                app.console.push_input(line);
+                app.console.reading = false;
+                // Resume execution after providing input
+                app.is_running = true;
+                app.single_step();
+            }
+            _ => {}
+        }
+        return Ok(false);
+    }
+
     if app.show_exit_popup {
         if key.code == KeyCode::Esc {
             app.show_exit_popup = false;
@@ -248,6 +268,12 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                 }
                 (KeyCode::Char('p'), Tab::Run) => {
                     app.is_running = false;
+                }
+                (KeyCode::Up, Tab::Run) if ctrl => {
+                    app.console.scroll = app.console.scroll.saturating_add(1);
+                }
+                (KeyCode::Down, Tab::Run) if ctrl => {
+                    app.console.scroll = app.console.scroll.saturating_sub(1);
                 }
                 (KeyCode::Up, Tab::Run) if app.show_registers => {
                     app.regs_scroll = app.regs_scroll.saturating_sub(1);

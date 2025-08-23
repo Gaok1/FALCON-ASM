@@ -125,3 +125,9 @@ The emulator executes instructions while `step` returns `true`.
 
 ### RAM view
 <img width="1920" height="999" alt="image" src="https://github.com/user-attachments/assets/63386101-393f-47d1-a559-9a3b74da95ac" />
+
+### Console
+
+The Run tab now features a bottom console where syscalls `print`/`read` perform I/O.
+Use it to view program output or type responses. Scroll with `Ctrl+Up/Down` to review
+previous lines.
