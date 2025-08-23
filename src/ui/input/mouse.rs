@@ -456,7 +456,7 @@ fn start_console_drag(app: &mut App, me: MouseEvent, area: Rect) {
 }
 
 fn handle_console_drag(app: &mut App, me: MouseEvent, area: Rect) {
-    let delta = me.row as i32 - app.console_drag_start_y as i32;
+    let delta = app.console_drag_start_y as i32 - me.row as i32;
     let root_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
