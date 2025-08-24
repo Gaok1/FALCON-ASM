@@ -67,6 +67,25 @@ Labels (`label:`) can be defined in any segment. To load a label address, use th
 - Registers `x0..x31` with aliases: `zero, ra, sp, gp, tp, t0..t6, s0/fp, s1, a0..a7, s2..s11`. `x0` is always 0.
 - Little-endian memory with `load8/16/32` and `store8/16/32` operations.
 
+## Syscalls
+
+Falcon ASM implements a few basic system calls. Place the syscall number in `a7`,
+set arguments in `a0` and execute `ecall`.
+
+| `a7` | Pseudo-instruction | Description |
+|------|--------------------|-------------|
+| 1 | `print rd` | Print the decimal value in register `rd` (`a0=rd`). |
+| 2 | `printString label\|rd` | Print the NUL-terminated string at `label` or address in `rd` (`a0=addr`). |
+| 3 | `read` | Read a line of input into memory at `a0` and append a NUL byte. |
+
+Example without pseudo-instructions:
+
+```asm
+    li a7, 1      # select syscall
+    mv a0, t0     # value to print
+    ecall
+```
+
 ## Opcode Summary
 
 ```

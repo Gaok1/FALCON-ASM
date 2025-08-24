@@ -172,6 +172,27 @@ Other formats (I, S, B, U, J) rearrange fields and immediates.
 
 - `ECALL` (`0x00000073`) and `HALT` (`0x00100073`) halt execution.
 
+## Syscalls
+
+`ecall` uses the value in `a7` to select a system call and `a0` for arguments.
+The emulator implements the following calls:
+
+| `a7` | Pseudo-instruction | Description | Argument |
+|------|--------------------|-------------|----------|
+| 1 | `print rd` | Print the decimal value in `a0`. | `a0` = register to print |
+| 2 | `printString label\|rd` | Print the NUL-terminated string at `a0`. | `a0` = address |
+| 3 | `read` | Read a line into memory at `a0` and append NUL. | `a0` = destination |
+
+Example:
+
+```asm
+    li a7, 1
+    mv a0, t0
+    ecall
+```
+
+Unrecognized codes stop execution.
+
 ## Assembler Rules
 
 - **Two passes**: the first collects labels (`label:`); the second resolves and encodes.
