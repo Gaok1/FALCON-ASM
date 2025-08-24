@@ -5,6 +5,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use rfd::FileDialog as OSFileDialog;
 use std::{io, time::Instant};
 
+
 use super::max_regs_scroll;
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
@@ -369,29 +370,3 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
     Ok(false)
 }
 
-fn max_regs_scroll(app: &App) -> usize {
-    let (width, height) = terminal::size().unwrap_or((80, 24));
-    let area = Rect::new(0, 0, width, height);
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(4),
-            Constraint::Min(0),
-            Constraint::Length(app.console_height),
-        ])
-        .split(area);
-    let main = chunks[2];
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(38),
-            Constraint::Length(app.imem_width),
-            Constraint::Min(46),
-        ])
-        .split(main);
-    let side = cols[0];
-    let lines = side.height.saturating_sub(4) as usize;
-    let total = 33usize; // PC + x0..x31
-    total.saturating_sub(lines)
-}

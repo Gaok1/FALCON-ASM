@@ -31,6 +31,6 @@ pub(crate) fn max_regs_scroll(app: &App) -> usize {
         .split(main);
     let side = cols[0];
     let lines = side.height.saturating_sub(4) as usize;
-    let total = 33usize; // PC + x0..x31
+    let total = 37usize; // idk why this number, just works
     total.saturating_sub(lines)
 }

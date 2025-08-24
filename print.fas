@@ -1,0 +1,7 @@
+.data
+message: .asciz "olaa mundo"
+
+.text
+  la t0, message
+  printString a0
+  nop
