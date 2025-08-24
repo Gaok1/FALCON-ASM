@@ -1,7 +1,7 @@
 use crate::falcon::{self, memory::Bus};
-use ratatui::Frame;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, Paragraph, Row, Table, Wrap};
+use ratatui::Frame;
 
 use super::{App, MemRegion, RunButton};
 use crate::ui::app::FormatMode;
@@ -686,7 +686,9 @@ fn render_console(f: &mut Frame, area: Rect, app: &App) {
     if app.console.reading {
         lines.push(Line::from(format!("> {}", app.console.current)));
     }
-    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let para = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     f.render_widget(para, area);
 
     let arrow_style = if app.hover_console_bar {
@@ -721,51 +723,141 @@ fn disasm_word(w: u32) -> String {
 fn pretty_instr(i: &falcon::instruction::Instruction) -> String {
     use falcon::instruction::Instruction::*;
     match *i {
-        Add { rd, rs1, rs2 } => format!("add  x{rd}, x{rs1}, x{rs2}"),
-        Sub { rd, rs1, rs2 } => format!("sub  x{rd}, x{rs1}, x{rs2}"),
-        And { rd, rs1, rs2 } => format!("and  x{rd}, x{rs1}, x{rs2}"),
-        Or { rd, rs1, rs2 } => format!("or   x{rd}, x{rs1}, x{rs2}"),
-        Xor { rd, rs1, rs2 } => format!("xor  x{rd}, x{rs1}, x{rs2}"),
-        Sll { rd, rs1, rs2 } => format!("sll  x{rd}, x{rs1}, x{rs2}"),
-        Srl { rd, rs1, rs2 } => format!("srl  x{rd}, x{rs1}, x{rs2}"),
-        Sra { rd, rs1, rs2 } => format!("sra  x{rd}, x{rs1}, x{rs2}"),
-        Slt { rd, rs1, rs2 } => format!("slt  x{rd}, x{rs1}, x{rs2}"),
-        Sltu { rd, rs1, rs2 } => format!("sltu x{rd}, x{rs1}, x{rs2}"),
-        Mul { rd, rs1, rs2 } => format!("mul  x{rd}, x{rs1}, x{rs2}"),
-        Mulh { rd, rs1, rs2 } => format!("mulh x{rd}, x{rs1}, x{rs2}"),
-        Mulhsu { rd, rs1, rs2 } => format!("mulhsu x{rd}, x{rs1}, x{rs2}"),
-        Mulhu { rd, rs1, rs2 } => format!("mulhu x{rd}, x{rs1}, x{rs2}"),
-        Div { rd, rs1, rs2 } => format!("div  x{rd}, x{rs1}, x{rs2}"),
-        Divu { rd, rs1, rs2 } => format!("divu x{rd}, x{rs1}, x{rs2}"),
-        Rem { rd, rs1, rs2 } => format!("rem  x{rd}, x{rs1}, x{rs2}"),
-        Remu { rd, rs1, rs2 } => format!("remu x{rd}, x{rs1}, x{rs2}"),
-        Addi { rd, rs1, imm } => format!("addi x{rd}, x{rs1}, {imm}"),
-        Andi { rd, rs1, imm } => format!("andi x{rd}, x{rs1}, {imm}"),
-        Ori { rd, rs1, imm } => format!("ori  x{rd}, x{rs1}, {imm}"),
-        Xori { rd, rs1, imm } => format!("xori x{rd}, x{rs1}, {imm}"),
-        Slti { rd, rs1, imm } => format!("slti x{rd}, x{rs1}, {imm}"),
-        Sltiu { rd, rs1, imm } => format!("sltiu x{rd}, x{rs1}, {imm}"),
-        Slli { rd, rs1, shamt } => format!("slli x{rd}, x{rs1}, {shamt}"),
-        Srli { rd, rs1, shamt } => format!("srli x{rd}, x{rs1}, {shamt}"),
-        Srai { rd, rs1, shamt } => format!("srai x{rd}, x{rs1}, {shamt}"),
-        Lb { rd, rs1, imm } => format!("lb   x{rd}, {imm}(x{rs1})"),
-        Lh { rd, rs1, imm } => format!("lh   x{rd}, {imm}(x{rs1})"),
-        Lw { rd, rs1, imm } => format!("lw   x{rd}, {imm}(x{rs1})"),
-        Lbu { rd, rs1, imm } => format!("lbu  x{rd}, {imm}(x{rs1})"),
-        Lhu { rd, rs1, imm } => format!("lhu  x{rd}, {imm}(x{rs1})"),
-        Sb { rs2, rs1, imm } => format!("sb   x{rs2}, {imm}(x{rs1})"),
-        Sh { rs2, rs1, imm } => format!("sh   x{rs2}, {imm}(x{rs1})"),
-        Sw { rs2, rs1, imm } => format!("sw   x{rs2}, {imm}(x{rs1})"),
-        Beq { rs1, rs2, imm } => format!("beq  x{rs1}, x{rs2}, {imm}"),
-        Bne { rs1, rs2, imm } => format!("bne  x{rs1}, x{rs2}, {imm}"),
-        Blt { rs1, rs2, imm } => format!("blt  x{rs1}, x{rs2}, {imm}"),
-        Bge { rs1, rs2, imm } => format!("bge  x{rs1}, x{rs2}, {imm}"),
-        Bltu { rs1, rs2, imm } => format!("bltu x{rs1}, x{rs2}, {imm}"),
-        Bgeu { rs1, rs2, imm } => format!("bgeu x{rs1}, x{rs2}, {imm}"),
-        Lui { rd, imm } => format!("lui  x{rd}, {imm}"),
-        Auipc { rd, imm } => format!("auipc x{rd}, {imm}"),
-        Jal { rd, imm } => format!("jal  x{rd}, {imm}"),
-        Jalr { rd, rs1, imm } => format!("jalr x{rd}, x{rs1}, {imm}"),
+        Add { rd, rs1, rs2 } => format!(
+            "add  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Sub { rd, rs1, rs2 } => format!(
+            "sub  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        And { rd, rs1, rs2 } => format!(
+            "and  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Or { rd, rs1, rs2 } => format!(
+            "or   {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Xor { rd, rs1, rs2 } => format!(
+            "xor  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Sll { rd, rs1, rs2 } => format!(
+            "sll  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Srl { rd, rs1, rs2 } => format!(
+            "srl  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Sra { rd, rs1, rs2 } => format!(
+            "sra  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Slt { rd, rs1, rs2 } => format!(
+            "slt  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Sltu { rd, rs1, rs2 } => format!(
+            "sltu {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Mul { rd, rs1, rs2 } => format!(
+            "mul  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Mulh { rd, rs1, rs2 } => format!(
+            "mulh {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Mulhsu { rd, rs1, rs2 } => format!(
+            "mulhsu {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Mulhu { rd, rs1, rs2 } => format!(
+            "mulhu {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Div { rd, rs1, rs2 } => format!(
+            "div  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Divu { rd, rs1, rs2 } => format!(
+            "divu {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Rem { rd, rs1, rs2 } => format!(
+            "rem  {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Remu { rd, rs1, rs2 } => format!(
+            "remu {}, {}, {}",
+            reg_name(rd),
+            reg_name(rs1),
+            reg_name(rs2)
+        ),
+        Addi { rd, rs1, imm } => format!("addi {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
+        Andi { rd, rs1, imm } => format!("andi {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
+        Ori { rd, rs1, imm } => format!("ori  {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
+        Xori { rd, rs1, imm } => format!("xori {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
+        Slti { rd, rs1, imm } => format!("slti {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
+        Sltiu { rd, rs1, imm } => format!("sltiu {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
+        Slli { rd, rs1, shamt } => format!("slli {}, {}, {shamt}", reg_name(rd), reg_name(rs1)),
+        Srli { rd, rs1, shamt } => format!("srli {}, {}, {shamt}", reg_name(rd), reg_name(rs1)),
+        Srai { rd, rs1, shamt } => format!("srai {}, {}, {shamt}", reg_name(rd), reg_name(rs1)),
+        Lb { rd, rs1, imm } => format!("lb   {}, {imm}({})", reg_name(rd), reg_name(rs1)),
+        Lh { rd, rs1, imm } => format!("lh   {}, {imm}({})", reg_name(rd), reg_name(rs1)),
+        Lw { rd, rs1, imm } => format!("lw   {}, {imm}({})", reg_name(rd), reg_name(rs1)),
+        Lbu { rd, rs1, imm } => format!("lbu  {}, {imm}({})", reg_name(rd), reg_name(rs1)),
+        Lhu { rd, rs1, imm } => format!("lhu  {}, {imm}({})", reg_name(rd), reg_name(rs1)),
+        Sb { rs2, rs1, imm } => format!("sb   {}, {imm}({})", reg_name(rs2), reg_name(rs1)),
+        Sh { rs2, rs1, imm } => format!("sh   {}, {imm}({})", reg_name(rs2), reg_name(rs1)),
+        Sw { rs2, rs1, imm } => format!("sw   {}, {imm}({})", reg_name(rs2), reg_name(rs1)),
+        Beq { rs1, rs2, imm } => format!("beq  {}, {}, {imm}", reg_name(rs1), reg_name(rs2)),
+        Bne { rs1, rs2, imm } => format!("bne  {}, {}, {imm}", reg_name(rs1), reg_name(rs2)),
+        Blt { rs1, rs2, imm } => format!("blt  {}, {}, {imm}", reg_name(rs1), reg_name(rs2)),
+        Bge { rs1, rs2, imm } => format!("bge  {}, {}, {imm}", reg_name(rs1), reg_name(rs2)),
+        Bltu { rs1, rs2, imm } => format!("bltu {}, {}, {imm}", reg_name(rs1), reg_name(rs2)),
+        Bgeu { rs1, rs2, imm } => format!("bgeu {}, {}, {imm}", reg_name(rs1), reg_name(rs2)),
+        Lui { rd, imm } => format!("lui  {}, {imm}", reg_name(rd)),
+        Auipc { rd, imm } => format!("auipc {}, {imm}", reg_name(rd)),
+        Jal { rd, imm } => format!("jal  {}, {imm}", reg_name(rd)),
+        Jalr { rd, rs1, imm } => format!("jalr {}, {}, {imm}", reg_name(rd), reg_name(rs1)),
         Ecall => "ecall".to_string(),
         Halt => "halt".to_string(),
     }
@@ -774,6 +866,12 @@ fn pretty_instr(i: &falcon::instruction::Instruction) -> String {
 fn ascii_bytes(bytes: &[u8]) -> String {
     bytes
         .iter()
-        .map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '.' })
+        .map(|&b| {
+            if b.is_ascii_graphic() || b == b' ' {
+                b as char
+            } else {
+                '.'
+            }
+        })
         .collect()
 }
