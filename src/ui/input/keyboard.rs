@@ -4,6 +4,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use rfd::FileDialog as OSFileDialog;
 use std::{io, time::Instant};
 
+use super::max_regs_scroll;
+
 pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
     if key.kind != KeyEventKind::Press {
         return Ok(false);
@@ -287,18 +289,32 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                     app.console.scroll = app.console.scroll.saturating_sub(1);
                 }
                 (KeyCode::Up, Tab::Run) if app.show_registers => {
+                    let max_scroll = max_regs_scroll(app);
                     app.regs_scroll = app.regs_scroll.saturating_sub(1);
-                    app.regs_scroll = app.regs_scroll.min(32);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
                 }
                 (KeyCode::Down, Tab::Run) if app.show_registers => {
-                    app.regs_scroll = (app.regs_scroll + 1).min(32);
+                    let max_scroll = max_regs_scroll(app);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
+                    app.regs_scroll = (app.regs_scroll + 1).min(max_scroll);
                 }
                 (KeyCode::PageUp, Tab::Run) if app.show_registers => {
+                    let max_scroll = max_regs_scroll(app);
                     app.regs_scroll = app.regs_scroll.saturating_sub(10);
-                    app.regs_scroll = app.regs_scroll.min(32);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
                 }
                 (KeyCode::PageDown, Tab::Run) if app.show_registers => {
-                    app.regs_scroll = (app.regs_scroll + 10).min(32);
+                    let max_scroll = max_regs_scroll(app);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
+                    app.regs_scroll = (app.regs_scroll + 10).min(max_scroll);
                 }
                 (KeyCode::Up, Tab::Run) if !app.show_registers => {
                     app.mem_view_addr = app.mem_view_addr.saturating_sub(app.mem_view_bytes);
