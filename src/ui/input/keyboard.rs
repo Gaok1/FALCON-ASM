@@ -1,6 +1,7 @@
 use crate::ui::app::{App, EditorMode, MemRegion, Tab};
 use arboard::Clipboard;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::{event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers}, terminal};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use rfd::FileDialog as OSFileDialog;
 use std::{io, time::Instant};
 
@@ -287,18 +288,32 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
                     app.console.scroll = app.console.scroll.saturating_sub(1);
                 }
                 (KeyCode::Up, Tab::Run) if app.show_registers => {
+                    let max_scroll = max_regs_scroll(app);
                     app.regs_scroll = app.regs_scroll.saturating_sub(1);
-                    app.regs_scroll = app.regs_scroll.min(32);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
                 }
                 (KeyCode::Down, Tab::Run) if app.show_registers => {
-                    app.regs_scroll = (app.regs_scroll + 1).min(32);
+                    let max_scroll = max_regs_scroll(app);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
+                    app.regs_scroll = (app.regs_scroll + 1).min(max_scroll);
                 }
                 (KeyCode::PageUp, Tab::Run) if app.show_registers => {
+                    let max_scroll = max_regs_scroll(app);
                     app.regs_scroll = app.regs_scroll.saturating_sub(10);
-                    app.regs_scroll = app.regs_scroll.min(32);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
                 }
                 (KeyCode::PageDown, Tab::Run) if app.show_registers => {
-                    app.regs_scroll = (app.regs_scroll + 10).min(32);
+                    let max_scroll = max_regs_scroll(app);
+                    if app.regs_scroll > max_scroll {
+                        app.regs_scroll = max_scroll;
+                    }
+                    app.regs_scroll = (app.regs_scroll + 10).min(max_scroll);
                 }
                 (KeyCode::Up, Tab::Run) if !app.show_registers => {
                     app.mem_view_addr = app.mem_view_addr.saturating_sub(app.mem_view_bytes);
@@ -350,4 +365,31 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
     }
 
     Ok(false)
+}
+
+fn max_regs_scroll(app: &App) -> usize {
+    let (width, height) = terminal::size().unwrap_or((80, 24));
+    let area = Rect::new(0, 0, width, height);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Min(0),
+            Constraint::Length(app.console_height),
+        ])
+        .split(area);
+    let main = chunks[2];
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(38),
+            Constraint::Length(app.imem_width),
+            Constraint::Min(46),
+        ])
+        .split(main);
+    let side = cols[0];
+    let lines = side.height.saturating_sub(4) as usize;
+    let total = 33usize; // PC + x0..x31
+    total.saturating_sub(lines)
 }
