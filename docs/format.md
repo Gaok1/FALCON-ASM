@@ -178,8 +178,8 @@ Other formats (I, S, B, U, J) rearrange fields and immediates.
 - **Comments**: anything after `;` or `#` is ignored.
 - **Separator**: `instr op1, op2, op3`.
 - **Segment directives**:
-  - `.text` starts the code section.
-  - `.data` starts the data section (allocated from `base_pc + 0x1000`).
+  - `.text` or `.section .text` starts the code section.
+  - `.data` or `.section .data` starts the data section (allocated from `base_pc + 0x1000`).
   - Inside `.data`:
     - `.byte` inserts 8-bit values.
     - `.half` inserts 16-bit values.

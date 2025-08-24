@@ -7,7 +7,7 @@ The project includes:
 
 - Instruction decoder and encoder
 - Two-pass text assembler with label support
-- `.text` and `.data` segments with data directives
+- `.text`/`.section .text` and `.data`/`.section .data` segments with data directives
 - Little-endian registers and memory
 - Execution engine ready for integration with graphical interfaces
 
@@ -30,8 +30,8 @@ Implements the essential subset of **RV32I**:
 
 The assembler accepts code split into segments:
 
-- `.text` – instruction segment.
-- `.data` – data segment, loaded **0x1000 bytes** after the program base address.
+- `.text` or `.section .text` – instruction segment.
+- `.data` or `.section .data` – data segment, loaded **0x1000 bytes** after the program base address.
 
 Inside `.data` the following directives are supported:
 

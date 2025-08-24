@@ -52,6 +52,26 @@ pub fn assemble(text: &str, base_pc: u32) -> Result<Program, AsmError> {
             section = Section::Data;
             continue;
         }
+        if let Some(rest) = raw.strip_prefix(".section") {
+            let name = rest.trim();
+            match name {
+                ".text" | "text" => section = Section::Text,
+                ".data" | "data" => section = Section::Data,
+                "" => {
+                    return Err(AsmError {
+                        line: *line_no,
+                        msg: "missing section name".into(),
+                    })
+                }
+                _ => {
+                    return Err(AsmError {
+                        line: *line_no,
+                        msg: format!("unknown section: {name}"),
+                    })
+                }
+            }
+            continue;
+        }
 
         let mut line = raw.as_str();
         if let Some(idx) = line.find(':') {
@@ -1091,5 +1111,22 @@ mod tests {
         let asm = ".text\nbeq x0, x0, 8192";
         let err = assemble(asm, 0).err().expect("expected error");
         assert!(err.msg.contains("13-bit"));
+    }
+
+    #[test]
+    fn section_directives_equivalent() {
+        let asm_section = ".section .data\nval: .word 1\n.section .text\n la t0, val\n ecall";
+        let asm_traditional = ".data\nval: .word 1\n.text\n la t0, val\n ecall";
+        let prog_section = assemble(asm_section, 0).expect("assemble section");
+        let prog_traditional = assemble(asm_traditional, 0).expect("assemble traditional");
+        assert_eq!(prog_section.text, prog_traditional.text);
+        assert_eq!(prog_section.data, prog_traditional.data);
+    }
+
+    #[test]
+    fn unknown_section_errors() {
+        let asm = ".section .bss";
+        let err = assemble(asm, 0).err().expect("expected error");
+        assert!(err.msg.contains("unknown section"));
     }
 }
