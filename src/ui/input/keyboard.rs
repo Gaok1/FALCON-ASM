@@ -5,6 +5,8 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use rfd::FileDialog as OSFileDialog;
 use std::{io, time::Instant};
 
+use super::max_regs_scroll;
+
 pub fn handle_key(app: &mut App, key: KeyEvent) -> io::Result<bool> {
     if key.kind != KeyEventKind::Press {
         return Ok(false);

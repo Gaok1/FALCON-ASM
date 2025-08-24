@@ -5,6 +5,8 @@ use crate::ui::{
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
+use super::max_regs_scroll;
+
 pub fn handle_mouse(app: &mut App, me: MouseEvent, area: Rect) {
     app.mouse_x = me.column;
     app.mouse_y = me.row;
@@ -578,11 +580,13 @@ fn handle_run_scroll(app: &mut App, me: MouseEvent, area: Rect, up: bool) {
         ])
         .split(main);
     let side = cols[0];
-    if me.column >= side.x && me.column < side.x + side.width && me.row >= side.y && me.row < side.y + side.height {
+    if me.column >= side.x
+        && me.column < side.x + side.width
+        && me.row >= side.y
+        && me.row < side.y + side.height
+    {
         if app.show_registers {
-            let lines = side.height.saturating_sub(2) as usize;
-            let total = 33usize;
-            let max_scroll = total.saturating_sub(lines);
+            let max_scroll = max_regs_scroll(app);
             if app.regs_scroll > max_scroll {
                 app.regs_scroll = max_scroll;
             }
