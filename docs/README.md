@@ -148,15 +148,15 @@ The emulator executes instructions while `step` returns `true`; encountering `ha
 
 # Examples
 ## Code editor
-<img width="1918" height="1009" alt="image" src="https://github.com/user-attachments/assets/4ade62a4-e3e0-4c69-b42b-ae52d5bd8397" />
+<img width="1915" height="999" alt="image" src="https://github.com/user-attachments/assets/45b05e1e-eadf-46dc-91f1-608ac999cc84" />
 
 ## Running code (emulator)
 
 ### Registers view
-<img width="1917" height="997" alt="image" src="https://github.com/user-attachments/assets/6be9a0ec-b64f-4cab-b9b5-ff581a27f692" />
+<img width="1915" height="993" alt="image" src="https://github.com/user-attachments/assets/6c3819ec-0c40-4682-a337-235a2afe6dc8" />
 
 ### RAM view
-<img width="1920" height="999" alt="image" src="https://github.com/user-attachments/assets/63386101-393f-47d1-a559-9a3b74da95ac" />
+<img width="1920" height="996" alt="image" src="https://github.com/user-attachments/assets/24559b62-3d98-4393-a456-ff10ba2c2e12" />
 
 ### Console
 
@@ -164,3 +164,6 @@ The Run tab now features a bottom console where syscalls `print`, `printString` 
 `read` perform I/O. `print rd` outputs the decimal value of a register, `printString
 label|rd` prints a NUL-terminated string and `read` stores a line at the address in
 `a0`. Scroll with `Ctrl+Up/Down` to review previous lines.
+
+<img width="1920" height="990" alt="image" src="https://github.com/user-attachments/assets/0cb2a885-cb88-4063-9897-481cf9df9208" />
+
