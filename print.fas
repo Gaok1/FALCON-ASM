@@ -1,0 +1,7 @@
+.data
+message: .asciz "Hello world"
+
+.text
+  la t0, message
+  printString t0
+  nop
